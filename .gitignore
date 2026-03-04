@@ -1,0 +1,33 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Virtual environment (single shared, at repo root)
+.venv/
+venv/
+env/
+
+# Pipeline — generated data (large, re-run pipeline to regenerate)
+pipeline/clean_images/
+pipeline/dataset/
+pipeline/data/failed_urls.txt
+pipeline/*.egg-info/
+
+# Training artifacts
+training/checkpoints/*.pth
+training/runs/*.csv
+training/runs/*.json
+
+# Inference outputs
+training/result*.png
+training/result*.jpg
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# OS
+.DS_Store
+Thumbs.db

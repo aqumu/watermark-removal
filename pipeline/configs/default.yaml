@@ -1,0 +1,38 @@
+seed: 42
+
+download:
+  csv_path: "./data/sql.csv"
+  failed_urls_path: "./data/failed_urls.txt"
+  num_images: 15000
+  workers: 8
+
+dataset:
+  output_dir: "./dataset"
+  train_split: 0.9
+  num_samples: 15000
+  resume: true
+
+paths:
+  clean_images_dir: "./clean_images"
+  watermark_path: "./watermark.png"
+
+placement:
+  width_fraction: [0.76, 0.82]
+
+alpha:
+  base_range: [0.1, 0.2]
+  perturbation: 0.02
+  spatial_noise_std: 0.01
+
+blending:
+  linear_prob: 0.5
+
+edge:
+  gaussian_sigma_range: [0.0, 0.4]
+  morph_kernel: [0, 1]
+
+degradation:
+  jpeg_quality: [80, 95]      # raised floor: quality 50 creates ringing halos at watermark edges
+  webp_quality: [80, 95]
+  downscale_range: [0.75, 1.0] # raised floor: extreme downscale adds blocky artefacts
+  gaussian_noise_std: 1.5
