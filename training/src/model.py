@@ -150,10 +150,20 @@ class MaskedUNet(nn.Module):
 # convenience
 # ──────────────────────────────────────────────────────────────────────────────
 
-def build_model(cfg: dict) -> MaskedUNet:
+def build_model(cfg: dict) -> nn.Module:
+    m = cfg["model"]
+    if m.get("type", "scratch") == "pretrained":
+        import segmentation_models_pytorch as smp
+        return smp.Unet(
+            encoder_name=m.get("encoder", "efficientnet-b0"),
+            encoder_weights=m.get("encoder_weights", "imagenet"),
+            in_channels=4,   # RGB + mask
+            classes=3,       # residual delta
+            activation="sigmoid",
+        )
     return MaskedUNet(
-        base_channels=cfg["model"]["base_channels"],
-        depth=cfg["model"]["depth"],
+        base_channels=m["base_channels"],
+        depth=m["depth"],
     )
 
 

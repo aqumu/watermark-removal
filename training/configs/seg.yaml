@@ -1,0 +1,33 @@
+dataset:
+  root: "../pipeline/dataset"  # same dataset used for removal training
+  image_size: 128              # light start; scale up once results look good
+  train_split: 0.9
+  num_workers: 2
+  max_samples: null            # use all 9,928 samples
+
+model:
+  encoder: efficientnet-b0     # pretrained ImageNet encoder via smp.Unet
+  encoder_weights: imagenet
+
+training:
+  epochs: 20
+  batch_size: 4
+  lr: 1.0e-4
+  lr_scheduler: cosine
+  weight_decay: 1.0e-4
+  grad_clip: 1.0
+  val_every: 5
+
+torch_threads: 0
+
+checkpointing:
+  dir: "./checkpoints_seg"
+  save_every: 5
+  keep_last: 3
+
+logging:
+  dir: "./runs_seg"
+  log_every: 20
+
+seed: 42
+device: cpu

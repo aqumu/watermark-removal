@@ -16,8 +16,11 @@ pipeline/*.egg-info/
 
 # Training artifacts
 training/checkpoints/*.pth
+training/checkpoints_seg/*.pth
 training/runs/*.csv
 training/runs/*.json
+training/runs_seg/*.csv
+training/runs_seg/*.json
 
 # Inference outputs
 training/result*.png
@@ -27,6 +30,7 @@ training/result*.jpg
 .idea/
 .vscode/
 *.iml
+.claude/
 
 # OS
 .DS_Store
