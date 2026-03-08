@@ -1,6 +1,6 @@
 dataset:
   root: "../pipeline/dataset"  # same dataset used for removal training
-  image_size: 128              # light start; scale up once results look good
+  image_size: 256              # 128 produced pixel-art masks; 256 gives full detail
   train_split: 0.9
   num_workers: 2
   max_samples: null            # use all 9,928 samples

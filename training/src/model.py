@@ -1,7 +1,9 @@
 """
 Masked U-Net for semi-transparent watermark removal
 ----------------------------------------------------
-Input  : 4 channels  (RGB watermarked in [-1,1]  +  binary mask in {0,1})
+Input  : 5 channels  (RGB watermarked in [-1,1]  +
+                      binary mask in {0,1} +
+                      grayscale gradient magnitude in [0,1])
 Output : 3 channels  (RGB residual delta in [0,1])
          pred_clean = watermarked_rgb − model_output   (clamped to [-1,1])
 
@@ -19,6 +21,8 @@ Architecture
 
 The mask is concatenated as the 4th input channel so the network can
 distinguish masked (watermarked) pixels from clean context at every level.
+The gradient magnitude is concatenated as the 5th channel to provide an
+explicit structural signal of where brightness jumps (the watermark edge) occur.
 """
 
 import torch
@@ -31,20 +35,29 @@ import torch.nn.functional as F
 # ──────────────────────────────────────────────────────────────────────────────
 
 class DoubleConv(nn.Module):
-    """Conv-BN-ReLU × 2"""
+    """Residual Conv-BN-ReLU block to preserve high-frequency details."""
     def __init__(self, in_ch: int, out_ch: int):
         super().__init__()
-        self.block = nn.Sequential(
+        self.conv = nn.Sequential(
             nn.Conv2d(in_ch, out_ch, 3, padding=1, bias=False),
             nn.BatchNorm2d(out_ch),
             nn.ReLU(inplace=True),
             nn.Conv2d(out_ch, out_ch, 3, padding=1, bias=False),
             nn.BatchNorm2d(out_ch),
-            nn.ReLU(inplace=True),
         )
+        # Identity shortcut — helps gradients flow through sharp edges
+        self.shortcut = nn.Sequential()
+        if in_ch != out_ch:
+            self.shortcut = nn.Sequential(
+                nn.Conv2d(in_ch, out_ch, 1, bias=False),
+                nn.BatchNorm2d(out_ch)
+            )
+        self.relu = nn.ReLU(inplace=True)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return self.block(x)
+        out = self.conv(x)
+        out += self.shortcut(x)
+        return self.relu(out)
 
 
 class EncoderBlock(nn.Module):
@@ -59,10 +72,19 @@ class EncoderBlock(nn.Module):
 
 
 class DecoderBlock(nn.Module):
+    """Upsample via PixelShuffle (Sub-pixel convolution) + DoubleConv"""
     def __init__(self, in_ch: int, skip_ch: int, out_ch: int):
         super().__init__()
-        self.up   = nn.Upsample(scale_factor=2, mode="bilinear", align_corners=False)
-        self.conv = DoubleConv(in_ch + skip_ch, out_ch)
+        # PixelShuffle(2) reshuffles 4 channels into 2x2 spatial grid.
+        # We want upsampled result to have in_ch // 2 channels.
+        mid_ch = in_ch // 2
+        self.up = nn.Sequential(
+            nn.Conv2d(in_ch, mid_ch * 4, kernel_size=3, padding=1, bias=False),
+            nn.PixelShuffle(2),
+            nn.BatchNorm2d(mid_ch),
+            nn.ReLU(inplace=True)
+        )
+        self.conv = DoubleConv(mid_ch + skip_ch, out_ch)
 
     def forward(self, x: torch.Tensor, skip: torch.Tensor) -> torch.Tensor:
         x = self.up(x)
@@ -84,12 +106,12 @@ class MaskedUNet(nn.Module):
     base_channels : feature width at the first encoder stage.
                     Subsequent stages double: base, 2×, 4×, 8×
     depth         : number of encoder/decoder stages (≥ 2, ≤ 5)
-    in_channels   : 4  (RGB + mask)
+    in_channels   : 5  (RGB + mask + gradient)
     out_channels  : 3  (RGB)
     """
 
     def __init__(self, base_channels: int = 32, depth: int = 4,
-                 in_channels: int = 4, out_channels: int = 3):
+                 in_channels: int = 5, out_channels: int = 3):
         super().__init__()
         assert 2 <= depth <= 5, "depth must be between 2 and 5"
 
@@ -113,11 +135,8 @@ class MaskedUNet(nn.Module):
             self.decoders.append(DecoderBlock(prev, c, c))
             prev = c
 
-        # output head — predicts residual delta in [0, 1]
-        self.head = nn.Sequential(
-            nn.Conv2d(prev, out_channels, 1),
-            nn.Sigmoid(),
-        )
+        # output head — predicts residual delta
+        self.head = nn.Conv2d(prev, out_channels, 1)
 
         self._init_weights()
 
@@ -130,9 +149,17 @@ class MaskedUNet(nn.Module):
             elif isinstance(m, nn.BatchNorm2d):
                 nn.init.ones_(m.weight)
                 nn.init.zeros_(m.bias)
+        
+        # Identity initialization for the head: 
+        # By setting the last layer to zero, the model starts by outputting 
+        # exactement 0 residue (Tanh(0) = 0), which is a perfect identity 
+        # mapping. This prevents the "cyan/black" saturation at Epoch 1.
+        nn.init.zeros_(self.head.weight)
+        if self.head.bias is not None:
+            nn.init.zeros_(self.head.bias)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """x: Bx4xHxW → out: Bx3xHxW"""
+        """x: Bx5xHxW (RGB + mask + gradient) → out: Bx3xHxW"""
         skips = []
         for enc in self.encoders:
             x, skip = enc(x)
@@ -143,7 +170,10 @@ class MaskedUNet(nn.Module):
         for dec, skip in zip(self.decoders, reversed(skips)):
             x = dec(x, skip)
 
-        return self.head(x)
+        # Map raw conv output to [-2, 2] range.
+        # This allows for a perfect 0 residue (identity) at tanh(0)
+        # and covers the full possible dynamic range of RGB error.
+        return 2.0 * torch.tanh(self.head(x))
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -157,7 +187,7 @@ def build_model(cfg: dict) -> nn.Module:
         return smp.Unet(
             encoder_name=m.get("encoder", "efficientnet-b0"),
             encoder_weights=m.get("encoder_weights", "imagenet"),
-            in_channels=4,   # RGB + mask
+            in_channels=5,   # RGB + mask + gradient
             classes=3,       # residual delta
             activation="sigmoid",
         )

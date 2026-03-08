@@ -179,6 +179,50 @@ def border_ring_loss(pred: torch.Tensor,
 
 
 # ──────────────────────────────────────────────────────────────────────────────
+# edge ring loss
+# ──────────────────────────────────────────────────────────────────────────────
+
+def edge_ring_loss(pred: torch.Tensor,
+                   target: torch.Tensor,
+                   mask: torch.Tensor,
+                   ring_px: int = 2) -> torch.Tensor:
+    """
+    High-weight L1 on the outermost `ring_px` pixels of the binary mask.
+
+    The ring is computed as:  binary_mask − erode(binary_mask, ring_px)
+    These are pixels that ARE watermarked (mask=1, so correction is expected)
+    but sit at the very edge of the mask where the model consistently
+    under-corrects due to mixed inside/outside context in its receptive field.
+
+    Unlike border_ring_loss (which uses a smooth 4·m·(1−m) weighting and
+    fires across the blurred-mask transition zone), this loss is binary:
+    every pixel in the ring receives equal, unweighted L1 penalty.  This
+    prevents the loss from being diluted across the wide transition zone.
+
+    ring_px = 0 disables the loss (returns zero).
+
+    pred, target : Bx3xHxW  [-1,1]
+    mask         : Bx1xHxW  [0,1]  (blurred loss mask from dataset)
+    ring_px      : erosion radius in pixels (integer kernel half-width)
+    """
+    if ring_px <= 0:
+        return pred.new_zeros(1).squeeze()
+
+    # Binarise the mask (blurred, so threshold at 0.5 gives the true footprint)
+    mask_bin = (mask >= 0.5).to(dtype=pred.dtype)
+
+    # Erode by ring_px pixels using max-pool on the negated mask
+    k = 2 * ring_px + 1
+    mask_eroded = -F.max_pool2d(-mask_bin, kernel_size=k, stride=1, padding=ring_px)
+
+    # Ring = outermost ring_px pixels that are still inside the mask
+    ring = mask_bin - mask_eroded  # {0, 1}
+
+    n = ring.sum().clamp(min=1e-6) * pred.shape[1]  # pixel × channel count
+    return ((pred - target).abs() * ring).sum() / n
+
+
+# ──────────────────────────────────────────────────────────────────────────────
 # combined loss
 # ──────────────────────────────────────────────────────────────────────────────
 
@@ -190,8 +234,10 @@ class CombinedLoss(nn.Module):
         self.w_l1_masked   = lc["l1_masked"]
         self.w_perceptual  = lc["perceptual"]
         self.w_ssim        = lc["ssim"]
-        self.w_color_moment = lc.get("color_moment", 0.0)
-        self.w_border       = lc.get("border", 0.0)
+        self.w_color_moment  = lc.get("color_moment", 0.0)
+        self.w_border        = lc.get("border", 0.0)
+        self.w_edge_ring     = lc.get("edge_ring", 0.0)
+        self.edge_ring_px    = int(lc.get("edge_ring_px", 2))
 
         self.ssim = SSIMLoss()
         self.perceptual = PerceptualLoss() if self.w_perceptual > 0 else None
@@ -237,12 +283,18 @@ class CombinedLoss(nn.Module):
                   if self.w_border > 0
                   else pred.new_zeros(1).squeeze())
 
+        # ── hard edge ring (outermost pixels of binary mask) ──────────────
+        er_loss = (edge_ring_loss(pred, target, mask, self.edge_ring_px)
+                   if self.w_edge_ring > 0
+                   else pred.new_zeros(1).squeeze())
+
         total = (self.w_l1_full      * l1_full
                + self.w_l1_masked    * l1_masked
                + self.w_ssim         * ssim_loss
                + self.w_perceptual   * perc_loss
                + self.w_color_moment * cm_loss
-               + self.w_border       * b_loss)
+               + self.w_border       * b_loss
+               + self.w_edge_ring    * er_loss)
 
         breakdown = {
             "l1_full":      l1_full.item(),
@@ -251,6 +303,7 @@ class CombinedLoss(nn.Module):
             "perceptual":   perc_loss.item() if self.perceptual else 0.0,
             "color_moment": cm_loss.item(),
             "border":       b_loss.item(),
+            "edge_ring":    er_loss.item(),
             "total":        total.item(),
         }
         return total, breakdown

@@ -143,7 +143,7 @@ With automatic mask prediction (recommended):
 ```bash
 cd training
 python infer.py \
-  --checkpoint     checkpoint/epoch_0060.pth \
+  --checkpoint     checkpoints/epoch_0060.pth \
   --seg-checkpoint checkpoints_seg/epoch_0030.pth \
   --watermarked    input.jpg \
   --output         result.png
@@ -157,6 +157,18 @@ python infer.py \
   --watermarked input.jpg \
   --mask        mask.png \
   --output      result.png
+```
+
+To generate a normalized loss heatmap during debugging, provide the clean ground truth and the `--debug` flag:
+
+```bash
+python infer.py \
+  --checkpoint  checkpoints/epoch_0060.pth \
+  --watermarked input.jpg \
+  --mask        mask.png \
+  --output      result.png \
+  --clean       clean.png \
+  --debug
 ```
 
 ---

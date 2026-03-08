@@ -26,8 +26,9 @@ import numpy as np
 import torch
 import yaml
 
-from src.model     import build_model
-from src.seg_model import build_seg_model
+from src.model       import build_model
+from src.seg_model   import build_seg_model
+from src.image_utils import compute_gradient
 
 
 def load_cfg(path: str) -> dict:
@@ -94,17 +95,21 @@ def preprocess(wm_path: str, mask_path: str, size: int):
     rgb = cv2.cvtColor(wm_r, cv2.COLOR_BGR2RGB).astype(np.float32) / 127.5 - 1.0
     rgb_t  = torch.from_numpy(rgb.transpose(2, 0, 1)).unsqueeze(0)       # 1x3xHxW
     mask_t = torch.from_numpy(mask_r).unsqueeze(0).unsqueeze(0)          # 1x1xHxW
+    
+    grad_t = compute_gradient(wm_r)
+    grad_np = (grad_t.squeeze().numpy() * 255).astype(np.uint8)           # save numpy for debug
+    grad_t = grad_t.unsqueeze(0)                                          # 1x1xHxW
 
-    inp = torch.cat([rgb_t, mask_t], dim=1)   # 1x4xHxW
-    return inp, wm, mask, orig_size
+    inp = torch.cat([rgb_t, mask_t, grad_t], dim=1)   # 1x5xHxW
+    return inp, wm, mask, orig_size, wm_r, mask_r, grad_np
 
 
 @torch.no_grad()
 def run(model, inp: torch.Tensor, device: torch.device) -> np.ndarray:
     """Returns a uint8 BGR image at the model's working resolution."""
     inp   = inp.to(device)
-    delta = model(inp)                                     # 1x3xHxW, residual [0,1]
-    pred  = (inp[:, :3] - delta).clamp(-1, 1)             # 1x3xHxW, clean [-1,1]
+    delta = model(inp)                                     # Bx3xHxW, residue in [-2, 2]
+    pred  = (inp[:, :3] - delta).clamp(-1, 1)             # Bx3xHxW, clean [-1,1]
     pred  = pred.squeeze(0).cpu().numpy()                  # 3xHxW
     pred  = ((pred + 1) / 2 * 255).clip(0, 255).astype(np.uint8)
     return cv2.cvtColor(pred.transpose(1, 2, 0), cv2.COLOR_RGB2BGR)
@@ -132,6 +137,56 @@ def blend_back(pred_bgr, orig_wm, orig_mask, orig_size, feather: int = 9):
     return out
 
 
+def save_debug_frames(out_path: str, wm_r: np.ndarray, mask_r: np.ndarray,
+                      grad_np: np.ndarray, pred_bgr: np.ndarray, clean_path: str = None) -> None:
+    """Save intermediate model inputs / outputs for debugging."""
+    import os
+    base, ext = os.path.splitext(out_path)
+    cv2.imwrite(f"{base}_debug_0_wm_resized{ext}", wm_r)
+    cv2.imwrite(f"{base}_debug_1_mask_resized{ext}", (mask_r * 255).astype(np.uint8))
+    cv2.imwrite(f"{base}_debug_2_gradient{ext}", grad_np)
+    cv2.imwrite(f"{base}_debug_3_model_raw{ext}", pred_bgr)
+    
+    if clean_path:
+        clean = cv2.imread(clean_path, cv2.IMREAD_COLOR)
+        if clean is not None:
+            size_h, size_w = pred_bgr.shape[:2]
+            clean_r = cv2.resize(clean, (size_w, size_h), interpolation=cv2.INTER_AREA)
+            diff = np.abs(pred_bgr.astype(np.float32) - clean_r.astype(np.float32))
+            diff_gray = diff.mean(axis=2)
+            max_diff = diff_gray.max()
+            if max_diff > 0:
+                diff_norm = (diff_gray / max_diff * 255).astype(np.uint8)
+            else:
+                diff_norm = np.zeros_like(diff_gray, dtype=np.uint8)
+            heatmap = cv2.applyColorMap(diff_norm, cv2.COLORMAP_JET)
+            
+            # --- Add Colorbar Legend ---
+            h, w = heatmap.shape[:2]
+            bar_w = 40
+            # Create a vertical gradient bar [0, 255]
+            bar = np.linspace(255, 0, h).astype(np.uint8).reshape(h, 1)
+            bar = np.tile(bar, (1, bar_w))
+            bar_bgr = cv2.applyColorMap(bar, cv2.COLORMAP_JET)
+            
+            # Pad the heatmap to make room for the bar and labels
+            pad_w = 80
+            canvas = np.zeros((h, w + pad_w, 3), dtype=np.uint8)
+            canvas[:, :w] = heatmap
+            canvas[:, w+10 : w+10+bar_w] = bar_bgr
+            
+            # Add text labels for max and min values
+            font = cv2.FONT_HERSHEY_SIMPLEX
+            fs, thick = 0.5, 1
+            color = (255, 255, 255)
+            cv2.putText(canvas, f"{max_diff:.2f}", (w + 10, 20), font, fs, color, thick, cv2.LINE_AA)
+            cv2.putText(canvas, "0.00", (w + 10, h - 10), font, fs, color, thick, cv2.LINE_AA)
+            
+            cv2.imwrite(f"{base}_debug_4_loss_heatmap{ext}", canvas)
+
+    print(f"Saved debug frames to {base}_debug_*")
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--checkpoint",     required=True)
@@ -144,6 +199,10 @@ def main():
     parser.add_argument("--output",         default="result.png")
     parser.add_argument("--size",           type=int, default=512)
     parser.add_argument("--config",         default="configs/train.yaml")
+    parser.add_argument("--clean",          default=None,
+                        help="optional clean ground truth image for loss heatmap generation in debug mode")
+    parser.add_argument("--debug",          action="store_true", 
+                        help="save intermediate resized/model-output images for debugging")
     args = parser.parse_args()
 
     if args.mask is None and args.seg_checkpoint is None:
@@ -154,7 +213,7 @@ def main():
     model  = load_model(cfg, args.checkpoint, device)
 
     if args.mask is not None:
-        inp, orig_wm, orig_mask, orig_size = preprocess(
+        inp, orig_wm, orig_mask, orig_size, wm_r, mask_r, grad_np = preprocess(
             args.watermarked, args.mask, args.size
         )
     else:
@@ -170,7 +229,6 @@ def main():
         orig_mask = predict_mask(seg_model, orig_wm, seg_size, device)
         print(f"Mask predicted by segmentation model (seg size={seg_size})")
 
-        # build the removal model input from the predicted mask
         wm_r   = cv2.resize(orig_wm,   (args.size, args.size), interpolation=cv2.INTER_AREA)
         mask_r = cv2.resize(orig_mask, (args.size, args.size), interpolation=cv2.INTER_NEAREST)
         mask_r = (mask_r > 127).astype(np.float32)
@@ -178,9 +236,18 @@ def main():
         rgb    = cv2.cvtColor(wm_r, cv2.COLOR_BGR2RGB).astype(np.float32) / 127.5 - 1.0
         rgb_t  = torch.from_numpy(rgb.transpose(2, 0, 1)).unsqueeze(0)
         mask_t = torch.from_numpy(mask_r).unsqueeze(0).unsqueeze(0)
-        inp    = torch.cat([rgb_t, mask_t], dim=1)
+        
+        grad_t = compute_gradient(wm_r)
+        grad_np = (grad_t.squeeze().numpy() * 255).astype(np.uint8)           # save numpy for debug
+        grad_t = grad_t.unsqueeze(0)
+
+        inp    = torch.cat([rgb_t, mask_t, grad_t], dim=1)
 
     pred_bgr = run(model, inp, device)
+    
+    if args.debug:
+        save_debug_frames(args.output, wm_r, mask_r, grad_np, pred_bgr, args.clean)
+
     result   = blend_back(pred_bgr, orig_wm, orig_mask, orig_size)
 
     cv2.imwrite(args.output, result)

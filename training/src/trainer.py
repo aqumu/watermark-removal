@@ -33,26 +33,64 @@ def psnr(pred: torch.Tensor, target: torch.Tensor, max_val: float = 2.0) -> floa
     return 10 * math.log10(max_val ** 2 / mse)
 
 
-# ──────────────────────────────────────────────────────────────────────────────
-# checkpoint helpers
-# ──────────────────────────────────────────────────────────────────────────────
+import tempfile
+import shutil
+
+def _safe_delete(path: Path, max_retries: int = 5):
+    """Attempt to delete a file with retries for Windows locking issues."""
+    for i in range(max_retries):
+        try:
+            if path.exists():
+                path.unlink()
+            return True
+        except PermissionError:
+            time.sleep(0.5 * (i + 1))
+    return False
 
 def _save_ckpt(ckpt_dir: Path, epoch: int, model: nn.Module,
                optimizer, scheduler, best_psnr: float, keep_last: int):
     ckpt_dir.mkdir(parents=True, exist_ok=True)
     path = ckpt_dir / f"epoch_{epoch:04d}.pth"
-    torch.save({
-        "epoch":      epoch,
-        "model":      model.state_dict(),
-        "optimizer":  optimizer.state_dict(),
-        "scheduler":  scheduler.state_dict() if scheduler else None,
-        "best_psnr":  best_psnr,
-    }, path)
+    
+    # "Step-Aside" Save: Write to system TEMP first to avoid OneDrive/Defender 
+    # reactive locks in the project folder.
+    fd, temp_path_str = tempfile.mkstemp(suffix=".pth.tmp")
+    os.close(fd) # Close handle, PyTorch will open it
+    temp_path = Path(temp_path_str)
+    
+    try:
+        # Save to global temp where background scanners are less aggressive
+        torch.save({
+            "epoch":      epoch,
+            "model":      model.state_dict(),
+            "optimizer":  optimizer.state_dict(),
+            "scheduler":  scheduler.state_dict() if scheduler else None,
+            "best_psnr":  best_psnr,
+        }, temp_path)
+        
+        # Give OS a moment to settle
+        time.sleep(0.2)
+        
+        # Move to destination (Atomic if on same drive, shutil.move handles cross-drive)
+        _safe_delete(path)
+        
+        # Retry move if locked
+        for i in range(10):
+            try:
+                shutil.move(str(temp_path), str(path))
+                break
+            except (PermissionError, OSError):
+                time.sleep(0.5 * (i + 1))
+        
+    except Exception as e:
+        _safe_delete(temp_path)
+        print(f"  [WARNING] Failed to save checkpoint at epoch {epoch}: {e}")
+        return None
 
-    # remove old checkpoints, keep the best + last K
+    # remove old checkpoints
     ckpts = sorted(ckpt_dir.glob("epoch_*.pth"))
     while len(ckpts) > keep_last:
-        ckpts[0].unlink()
+        _safe_delete(ckpts[0])
         ckpts = ckpts[1:]
 
     return path
@@ -94,7 +132,8 @@ class CSVLogger:
 class Trainer:
     def __init__(self, model: nn.Module, cfg: dict,
                  train_loader: DataLoader, val_loader: DataLoader,
-                 resume: str | None = None):
+                 resume: str | None = None,
+                 load_weights: str | None = None):
 
         self.model       = model
         self.cfg         = cfg
@@ -140,6 +179,10 @@ class Trainer:
             self.start_epoch += 1
             print(f"Resumed from {resume} (epoch {self.start_epoch - 1}, "
                   f"best PSNR {self.best_psnr:.2f})")
+        elif load_weights:
+            ckpt = torch.load(load_weights, map_location="cpu", weights_only=True)
+            self.model.load_state_dict(ckpt["model"])
+            print(f"Loaded weights from {load_weights} (starting fresh from epoch 1)")
 
     # ── scheduler ─────────────────────────────────────────────────────────
 

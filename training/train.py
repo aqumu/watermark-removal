@@ -12,10 +12,12 @@ import random
 
 import numpy as np
 import torch
+import torch.nn as nn
 import yaml
-from torch.utils.data import DataLoader, Subset
+from torch.utils.data import DataLoader
 
-from src.dataset import WatermarkDataset
+from src.dataset import make_splits
+from src.losses  import CombinedLoss
 from src.model   import build_model, count_params
 from src.trainer import Trainer
 
@@ -33,31 +35,17 @@ def load_cfg(path: str) -> dict:
 
 def make_loaders(cfg: dict):
     ds_cfg = cfg["dataset"]
-
-    full_ds = WatermarkDataset(
+    loss_cfg = cfg.get("loss", {})
+    
+    tr_ds, va_ds = make_splits(
         root=ds_cfg["root"],
         image_size=ds_cfg["image_size"],
-        augment=True,
+        train_frac=ds_cfg["train_split"],
+        seed=cfg["seed"],
+        loss_mask_blur_pct=loss_cfg.get("loss_mask_blur_pct", 0.0),
+        loss_mask_dilate_pct=loss_cfg.get("loss_mask_dilate_pct", 0.0),
+        max_samples=ds_cfg.get("max_samples")
     )
-
-    n = len(full_ds)
-    max_samples = ds_cfg.get("max_samples") or n
-    max_samples = min(max_samples, n)
-
-    rng = torch.Generator().manual_seed(cfg["seed"])
-    all_idx = torch.randperm(n, generator=rng).tolist()[:max_samples]
-
-    n_train = int(max_samples * ds_cfg["train_split"])
-    tr_ds = Subset(full_ds, all_idx[:n_train])
-    va_ds_idx = all_idx[n_train:]
-
-    # val set should not augment – we wrap a fresh no-aug dataset
-    val_full = WatermarkDataset(
-        root=ds_cfg["root"],
-        image_size=ds_cfg["image_size"],
-        augment=False,
-    )
-    va_ds = Subset(val_full, va_ds_idx)
 
     nw = ds_cfg["num_workers"]
     train_loader = DataLoader(
@@ -76,7 +64,9 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", default="configs/train.yaml")
     parser.add_argument("--resume", default=None,
-                        help="path to checkpoint to resume from")
+                        help="path to checkpoint to resume from (full state)")
+    parser.add_argument("--load-weights", default=None,
+                        help="path to checkpoint to load weights from (fresh start)")
     args = parser.parse_args()
 
     cfg = load_cfg(args.config)
@@ -103,6 +93,7 @@ def main():
         train_loader=train_loader,
         val_loader=val_loader,
         resume=args.resume,
+        load_weights=args.load_weights,
     )
     trainer.train()
 
