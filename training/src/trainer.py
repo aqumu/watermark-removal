@@ -309,6 +309,17 @@ class Trainer:
             self.model.load_state_dict(ckpt["model"])
             print(f"Loaded weights from {load_weights} (starting from epoch {self.start_epoch})")
 
+        # Optional frozen reference model for drift anchoring.
+        # When enabled, this preserves existing output quality while edge-focused
+        # losses nudge the solution toward less visible watermark residues.
+        self.ref_model = None
+        if max(self.criterion._w_drift) > 0:
+            self.ref_model = copy.deepcopy(self.model).to(self.device)
+            self.ref_model.eval()
+            for p in self.ref_model.parameters():
+                p.requires_grad_(False)
+            print("Drift anchor enabled (frozen reference model copied from start weights)")
+
         self.plotter       = plotter
         # Calculate global step from restored epoch so new logs align to the timeline
         self._global_step  = (self.start_epoch - 1) * len(self.train_loader)
@@ -408,9 +419,17 @@ class Trainer:
                                 enabled=self.use_amp):
                 delta      = self.model(inp)
                 pred_clean = (wm - delta).clamp(-1, 1)
+
+                ref_pred = None
+                if self.ref_model is not None:
+                    with torch.no_grad():
+                        ref_delta = self.ref_model(inp)
+                        ref_pred = (wm - ref_delta).clamp(-1, 1)
+
                 loss, breakdown = self.criterion(pred_clean, target, mask,
                                                  delta=delta,
                                                  wm=wm,
+                                                 ref_pred=ref_pred,
                                                  use_perceptual=use_perc)
 
             self.scaler.scale(loss / grad_accum_steps).backward()
@@ -455,6 +474,10 @@ class Trainer:
                       f"sat={breakdown['saturation']:.4f}  "
                       f"cm={breakdown['color_moment']:.4f}  "
                       f"border={breakdown['border']:.4f}  "
+                      f"egrad={breakdown['edge_grad']:.4f}  "
+                      f"ecoh={breakdown['edge_coherence']:.4f}  "
+                      f"elap={breakdown['edge_laplacian']:.4f}  "
+                      f"drift={breakdown['drift']:.4f}  "
                       f"itv={breakdown['interior_tv']:.4f}  "
                       f"btv={breakdown['bg_tv']:.4f}  "
                       f"bd={breakdown['bg_delta']:.4f}  "

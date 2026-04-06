@@ -36,6 +36,13 @@ loss:
   perceptual: 0.1
   perceptual_every: 1
   saturation: 0.4
+  # Surgical edge clean-up terms (use edge-focused soft ring: 4*m*(1-m))
+  edge_grad: 0.03
+  edge_coherence: 0.02
+  edge_laplacian: 0.01
+  # Keep already-good regions anchored to the starting checkpoint output.
+  drift: 1.0
+  drift_anchor_scale: 2.0
   loss_mask_blur_pct: 4.0
   erosion_kernel: 3 # Scaled down for 256px
 

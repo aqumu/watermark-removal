@@ -54,6 +54,11 @@ loss:
   # Loss mask blur: sigma = image_size × (blur_pct / 100)
   # At 512px and 8.0% → sigma ≈ 40.96px → ksize ≈ 246px (wide soft transition zone)
   # Previously 2.5% with broken ksize = sigma*3 → almost no border ring activation.
+  edge_grad: [0.01, 0.04] # gradient mismatch in the edge ring
+  edge_coherence: [0.005, 0.03] # directional coherence of residual edges
+  edge_laplacian: [0.0, 0.015] # second-derivative cleanup for thin halo traces
+  drift: [1.5, 0.8] # anchor to initial model output outside edge ring
+  drift_anchor_scale: 2.0
   loss_mask_blur_pct: 4.0
 
   # Erosion kernel for mask interior: scales with resolution.
