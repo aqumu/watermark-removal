@@ -66,6 +66,10 @@ _COMP_COLORS = {
     "interior_tv":        "#4CAF50",   # green
     "bg_tv":              "#795548",   # brown
     "bg_delta":           "#607D8B",   # blue-grey
+    "edge_grad":          "#FFB300",   # amber
+    "edge_coherence":     "#26A69A",   # teal
+    "edge_laplacian":     "#8D6E63",   # mocha
+    "drift":              "#B39DDB",   # light purple
 }
 
 
@@ -83,6 +87,17 @@ class LivePlotter:
     # the figure redrawn.  200 ms gives 5 fps, plenty for training feedback.
     _POLL_MS = 200
 
+    @staticmethod
+    def _weight_enabled(weight_cfg) -> bool:
+        """
+        Return True when a loss should be displayed from config.
+        - scalar: show only if non-zero
+        - [start, end]: show if either endpoint is non-zero
+        """
+        if isinstance(weight_cfg, (list, tuple)):
+            return any(float(v) != 0.0 for v in weight_cfg)
+        return float(weight_cfg) != 0.0
+
     def __init__(self, log_dir: str | Path, total_epochs: int, loss_cfg: dict, 
                  log_every: int = 10):
         self._log_dir      = Path(log_dir)
@@ -97,10 +112,16 @@ class LivePlotter:
         # EMA running state (main-thread only)
         self._ema_state: dict[str, float] = {}
 
+        # Only plot terms explicitly enabled in config.
+        self._active_components = [
+            k for k in _COMP_COLORS
+            if self._weight_enabled(self._loss_cfg.get(k, 0.0))
+        ]
+
         # History buffers (main-thread only)
         self._gs:               list[int]   = []
         self._total_ema:        list[float] = []
-        self._comp_ema:         dict[str, list[float]] = {k: [] for k in _COMP_COLORS}
+        self._comp_ema:         dict[str, list[float]] = {k: [] for k in self._active_components}
 
         self._val_gs:           list[int]   = []
         self._val_psnr:         list[float] = []
@@ -184,7 +205,8 @@ class LivePlotter:
                 antialiased=True, solid_capstyle="round", solid_joinstyle="round")
 
             self._comp_lines: dict = {}
-            for comp, color in _COMP_COLORS.items():
+            for comp in self._active_components:
+                color = _COMP_COLORS[comp]
                 line, = self._ax_comp.plot(
                     [], [], color=color, lw=1.4, label=comp, alpha=0.8,
                     antialiased=True, solid_capstyle="round", solid_joinstyle="round")
@@ -192,7 +214,8 @@ class LivePlotter:
 
             self._ax_loss.legend(loc="upper left",  fontsize=8)
             self._ax_psnr.legend(loc="upper right", fontsize=8)
-            self._ax_comp.legend(loc="upper right", fontsize=8, ncol=2)
+            if self._comp_lines:
+                self._ax_comp.legend(loc="upper right", fontsize=8, ncol=2)
 
             # ── timer: polls the queue from the main thread ────────────────
             self._timer = self.fig.canvas.new_timer(interval=self._POLL_MS)
@@ -289,7 +312,7 @@ class LivePlotter:
             _ema_update(self._ema_state, "_total", breakdown["total"])
         )
         lc = self._loss_cfg
-        for comp in _COMP_COLORS:
+        for comp in self._active_components:
             raw = breakdown.get(comp, 0.0)
             if raw == 0.0:
                 # If loss was skipped, don't update EMA with 0.0, just keep previous
