@@ -16,8 +16,8 @@ reconstructing the clean image directly.  This is more robust:
 Architecture
   Encoder : N blocks of  Conv → BN → ReLU → Conv → BN → ReLU → MaxPool
   Bridge  : same double-conv without pooling
-  Decoder : Upsample(bilinear) → concat(skip) → double-conv
-  Head    : 1×1 Conv(C→3) + Sigmoid
+  Decoder : Upsample(nearest) → 3×3 Conv → concat(skip) → double-conv
+  Head    : 1×1 Conv(C→3)
 
 The mask is concatenated as the 4th input channel so the network can
 distinguish masked (watermarked) pixels from clean context at every level.
@@ -28,6 +28,7 @@ explicit structural signal of where brightness jumps (the watermark edge) occur.
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torch.utils.checkpoint import checkpoint as grad_checkpoint
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -72,17 +73,15 @@ class EncoderBlock(nn.Module):
 
 
 class DecoderBlock(nn.Module):
-    """Upsample via PixelShuffle (Sub-pixel convolution) + DoubleConv"""
+    """Upsample via nearest-neighbor + 3×3 conv + DoubleConv"""
     def __init__(self, in_ch: int, skip_ch: int, out_ch: int):
         super().__init__()
-        # PixelShuffle(2) reshuffles 4 channels into 2x2 spatial grid.
-        # We want upsampled result to have in_ch // 2 channels.
         mid_ch = in_ch // 2
         self.up = nn.Sequential(
-            nn.Conv2d(in_ch, mid_ch * 4, kernel_size=3, padding=1, bias=False),
-            nn.PixelShuffle(2),
+            nn.Upsample(scale_factor=2, mode="nearest"),
+            nn.Conv2d(in_ch, mid_ch, kernel_size=3, padding=1, bias=False),
             nn.BatchNorm2d(mid_ch),
-            nn.ReLU(inplace=True)
+            nn.ReLU(inplace=True),
         )
         self.conv = DoubleConv(mid_ch + skip_ch, out_ch)
 
@@ -103,18 +102,24 @@ class MaskedUNet(nn.Module):
     """
     Parameters
     ----------
-    base_channels : feature width at the first encoder stage.
-                    Subsequent stages double: base, 2×, 4×, 8×
-    depth         : number of encoder/decoder stages (≥ 2, ≤ 5)
-    in_channels   : 5  (RGB + mask + gradient)
-    out_channels  : 3  (RGB)
+    base_channels  : feature width at the first encoder stage.
+                     Subsequent stages double: base, 2×, 4×, 8×
+    depth          : number of encoder/decoder stages (≥ 2, ≤ 5)
+    in_channels    : 5  (RGB + mask + gradient)
+    out_channels   : 3  (RGB)
+    use_checkpoint : if True, wrap each encoder block, bridge, and decoder
+                     block with torch.utils.checkpoint to trade recomputation
+                     for activation memory.  Required at 512px on 8 GB VRAM
+                     (saves ~40–50% peak activation memory at ~30% extra compute).
     """
 
     def __init__(self, base_channels: int = 32, depth: int = 4,
-                 in_channels: int = 5, out_channels: int = 3):
+                 in_channels: int = 5, out_channels: int = 3,
+                 use_checkpoint: bool = False):
         super().__init__()
         assert 2 <= depth <= 5, "depth must be between 2 and 5"
 
+        self.use_checkpoint = use_checkpoint
         chs = [base_channels * (2 ** i) for i in range(depth)]
 
         # encoder
@@ -149,10 +154,10 @@ class MaskedUNet(nn.Module):
             elif isinstance(m, nn.BatchNorm2d):
                 nn.init.ones_(m.weight)
                 nn.init.zeros_(m.bias)
-        
-        # Identity initialization for the head: 
-        # By setting the last layer to zero, the model starts by outputting 
-        # exactement 0 residue (Tanh(0) = 0), which is a perfect identity 
+
+        # Identity initialization for the head:
+        # By setting the last layer to zero, the model starts by outputting
+        # exactement 0 residue (Tanh(0) = 0), which is a perfect identity
         # mapping. This prevents the "cyan/black" saturation at Epoch 1.
         nn.init.zeros_(self.head.weight)
         if self.head.bias is not None:
@@ -162,13 +167,26 @@ class MaskedUNet(nn.Module):
         """x: Bx5xHxW (RGB + mask + gradient) → out: Bx3xHxW"""
         skips = []
         for enc in self.encoders:
-            x, skip = enc(x)
+            if self.use_checkpoint and x.requires_grad:
+                # gradient checkpointing: recompute activations on backward pass
+                # instead of storing them.  Halves peak activation memory.
+                # use_reentrant=False is required for modern PyTorch and avoids
+                # issues with in-place ops inside the checkpointed functions.
+                x, skip = grad_checkpoint(enc, x, use_reentrant=False)
+            else:
+                x, skip = enc(x)
             skips.append(skip)
 
-        x = self.bridge(x)
+        if self.use_checkpoint and x.requires_grad:
+            x = grad_checkpoint(self.bridge, x, use_reentrant=False)
+        else:
+            x = self.bridge(x)
 
         for dec, skip in zip(self.decoders, reversed(skips)):
-            x = dec(x, skip)
+            if self.use_checkpoint and x.requires_grad:
+                x = grad_checkpoint(dec, x, skip, use_reentrant=False)
+            else:
+                x = dec(x, skip)
 
         # Map raw conv output to [-2, 2] range.
         # This allows for a perfect 0 residue (identity) at tanh(0)
@@ -194,6 +212,7 @@ def build_model(cfg: dict) -> nn.Module:
     return MaskedUNet(
         base_channels=m["base_channels"],
         depth=m["depth"],
+        use_checkpoint=m.get("use_checkpoint", False),
     )
 
 

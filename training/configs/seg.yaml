@@ -1,22 +1,31 @@
 dataset:
-  root: "../pipeline/dataset"  # same dataset used for removal training
-  image_size: 256              # 128 produced pixel-art masks; 256 gives full detail
+  root: "../pipeline/dataset" # same dataset used for removal training
+  image_size: 256 # 128 produced pixel-art masks; 256 gives full detail
   train_split: 0.9
   num_workers: 2
-  max_samples: null            # use all 9,928 samples
+  max_samples: 10000
 
 model:
-  encoder: efficientnet-b0     # pretrained ImageNet encoder via smp.Unet
-  encoder_weights: imagenet
+  encoder: efficientnet-b0 # pretrained ImageNet encoder — distinguishes logos from textures
 
 training:
-  epochs: 20
+  epochs: 40
   batch_size: 4
-  lr: 1.0e-4
+  lr: 1.0e-4         # decoder / head LR (randomly initialised)
+  encoder_lr: 1.0e-5 # encoder LR — 10× lower to protect pretrained ImageNet weights
   lr_scheduler: cosine
   weight_decay: 1.0e-4
-  grad_clip: 1.0
-  val_every: 5
+  pos_weight: 15.0   # pretrained features resist collapse; 30 was compensation for the weak custom model
+  focal_gamma: 2.0   # focal loss gamma — higher = more focus on hard pixels (0 = disabled)
+  loss_weights:
+    bce: 0.5         # pretrained features make BCE gradients meaningful — raise it
+    focal: 0.5       # same — focal is effective now
+    l1: 0.1
+    ms: 0.25         # pretrained model won't hollow-predict; less critical
+    dice: 0.5        # still useful for overlap, but no longer needs to carry everything
+  grad_clip: 2.0     # pretrained encoder produces smaller, more stable gradients
+  val_every: 1
+  amp: true # bfloat16 mixed precision (activates only on CUDA)
 
 torch_threads: 0
 
@@ -28,6 +37,7 @@ checkpointing:
 logging:
   dir: "./runs_seg"
   log_every: 20
+  preview_every: 40 # update visualisation every N global steps (0 = epoch-end only)
 
 seed: 42
-device: cpu
+device: cuda

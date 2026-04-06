@@ -4,7 +4,7 @@ download:
   csv_path: "./data/sql.csv"
   failed_urls_path: "./data/failed_urls.txt"
   num_images: 15000
-  workers: 8
+  workers: 10
 
 dataset:
   output_dir: "./dataset"
@@ -32,7 +32,7 @@ edge:
   morph_kernel: [0, 1]
 
 degradation:
-  jpeg_quality: [80, 95]      # raised floor: quality 50 creates ringing halos at watermark edges
+  jpeg_quality: [80, 95] # raised floor: quality 50 creates ringing halos at watermark edges
   webp_quality: [80, 95]
   downscale_range: [0.75, 1.0] # raised floor: extreme downscale adds blocky artefacts
   gaussian_noise_std: 1.5

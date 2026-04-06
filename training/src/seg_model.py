@@ -1,25 +1,27 @@
 """
 Segmentation model for watermark mask prediction
 -------------------------------------------------
-Input  : 3-ch RGB watermarked image (normalised to ImageNet mean/std)
-Output : 1-ch soft mask in [0, 1] (sigmoid activation)
+Input  : 3-ch RGB tensor in [-1, 1]
+Output : 1-ch soft mask logits (apply sigmoid for probabilities)
 
-Uses segmentation_models_pytorch with a pretrained EfficientNet-B0 encoder
-(ImageNet weights) for faster convergence than a from-scratch U-Net.
+Uses a pretrained EfficientNet-B0 encoder (ImageNet weights) via
+segmentation-models-pytorch.  The pretrained encoder already learns
+rich semantic features that distinguish logos/text from natural textures,
+which is the primary failure mode of the custom U-Net.
+
+The explicit Sobel gradient channel is dropped — pretrained conv layers
+detect edges implicitly and more accurately.
 """
 
+import torch.nn as nn
 import segmentation_models_pytorch as smp
 
 
-def build_seg_model(cfg: dict):
-    model_cfg = cfg["model"]
-    encoder   = model_cfg.get("encoder", "efficientnet-b0")
-    weights   = model_cfg.get("encoder_weights", "imagenet")
-
+def build_seg_model(cfg: dict) -> nn.Module:
+    encoder = cfg["model"].get("encoder", "efficientnet-b0")
     return smp.Unet(
         encoder_name=encoder,
-        encoder_weights=weights,
+        encoder_weights="imagenet",
         in_channels=3,
         classes=1,
-        activation="sigmoid",
     )

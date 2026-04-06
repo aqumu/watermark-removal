@@ -1,5 +1,4 @@
 @echo off
-setlocal
 
 echo === Watermark Removal - Windows Setup ===
 echo.
@@ -15,6 +14,7 @@ if not exist ".venv" (
     python -m venv .venv
 )
 
+echo Activating virtual environment...
 call .venv\Scripts\activate.bat
 python -m pip install --upgrade pip --quiet
 
@@ -25,15 +25,15 @@ echo   2) NVIDIA GPU - CUDA 12.1
 echo   3) NVIDIA GPU - CUDA 11.8
 echo   4) Skip PyTorch install (already installed)
 echo.
-set /p choice="Enter choice [1-4]: "
+set /p SETUP_CHOICE="Enter choice [1-4]: "
 
-if "%choice%"=="1" (
+if "%SETUP_CHOICE%"=="1" (
     pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
-) else if "%choice%"=="2" (
+) else if "%SETUP_CHOICE%"=="2" (
     pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121
-) else if "%choice%"=="3" (
+) else if "%SETUP_CHOICE%"=="3" (
     pip install torch torchvision --index-url https://download.pytorch.org/whl/cu118
-) else if "%choice%"=="4" (
+) else if "%SETUP_CHOICE%"=="4" (
     echo Skipping PyTorch install.
 ) else (
     echo Invalid choice. Defaulting to CPU.
@@ -44,21 +44,24 @@ echo.
 echo Installing dependencies...
 pip install -r pipeline\requirements.txt
 pip install -r training\requirements.txt
+
+echo.
+echo Installing CLI commands (wm-generate, wm-preview)...
 pip install -e pipeline\
 
 echo.
-echo === Setup complete ===
+echo === Setup complete. Virtual environment is now active. ===
 echo.
-echo Generate the dataset (run from pipeline\ directory):
-echo   cd pipeline
-echo   ..\venv\Scripts\wm-generate
-echo   cd ..
+echo First-time workflow on a new machine:
 echo.
-echo Train the model:
-echo   .venv\Scripts\python.exe training\train.py
+echo   1) Generate the dataset:
+echo        wm-generate --config pipeline\configs\default.yaml
 echo.
-echo Run inference:
-echo   .venv\Scripts\python.exe training\infer.py --checkpoint training\checkpoints\epoch_XXXX.pth --watermarked IMAGE --mask MASK --output result.png
+echo   2) Train the model:
+echo        cd training
+echo        python train.py
 echo.
-
-endlocal
+echo   3) Run inference:
+echo        python infer.py --checkpoint checkpoints\best.pth ^
+echo            --watermarked IMAGE --mask MASK --output result.png
+echo.

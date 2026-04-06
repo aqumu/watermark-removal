@@ -18,42 +18,57 @@ def compute_gradient(bgr: np.ndarray) -> torch.Tensor:
     return torch.from_numpy(mag).unsqueeze(0)  # 1xHxW
 
 
-def dilate_mask_input(mask: np.ndarray) -> np.ndarray:
+def dilate_mask_input(mask: np.ndarray, augment: bool = False,
+                      image_size: int = 256) -> np.ndarray:
     """
-    Create a randomly dilated binary mask for the model's 4th input channel.
+    Create a randomly perturbed binary mask for the model's 4th input channel.
 
-    1. Threshold the soft mask at 0.5 → binary {0, 1}.
-    2. Dilate by a random kernel (3–7 px) so the true watermark edge
-       is always inside the mask boundary.
+    augment=False (inference): always dilate by exactly 5 px so the true watermark
+        edge is inside the mask boundary. Fixed value for deterministic inference.
 
-    mask : HxW float32 in [0, 1]
+    augment=True (training): additionally applies positional jitter and random
+        shape variation to teach the model to handle imperfect real-world masks:
+          - Translation ±(4 × image_size/256) px in x and y (scales with resolution)
+          - Morphological op sampled from: erode-3, erode-5, no-op,
+            dilate-3, dilate-5, dilate-7  (dilate weighted 3×)
+
+    mask       : HxW float32 in [0, 1]
+    image_size : training resolution — used to scale the translation jitter so
+                 ±4px at 256px maps to ±8px at 512px (same proportional coverage).
     returns HxW float32 in [0, 1]
     """
-    binary = (mask >= 0.5).astype(np.uint8)  # uint8 needed for cv2.dilate
-    ksize = random.choice([3, 5, 7])  # randomise dilation amount
-    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (ksize, ksize))
-    dilated = cv2.dilate(binary, kernel, iterations=1)
-    return dilated.astype(np.float32)
-
-
-def dilate_mask_for_loss(mask: np.ndarray, dilate_pct: float,
-                         image_size: int) -> np.ndarray:
-    """
-    Dilate the mathematical mask slightly before computing the loss target.
-    This compensates for JPEG compression and downscaling smearing the bright 
-    watermark pixels past the strict mathematical boundary of the clean mask.
-    """
-    if dilate_pct <= 0:
-        return mask
-
-    # Convert percentage to pixel radius (minimum 1px if pct > 0)
-    radius = max(1, int(image_size * (dilate_pct / 100.0)))
-    ksize = radius * 2 + 1
-
     binary = (mask >= 0.5).astype(np.uint8)
-    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (ksize, ksize))
-    dilated = cv2.dilate(binary, kernel, iterations=1)
-    return dilated.astype(np.float32)
+
+    if augment:
+        # Scale translation with resolution so jitter covers the same
+        # proportional area regardless of whether we train at 256 or 512.
+        max_translate = max(1, round(4 * image_size / 256))
+        tx = random.randint(-max_translate, max_translate)
+        ty = random.randint(-max_translate, max_translate)
+        if tx != 0 or ty != 0:
+            M = np.float32([[1, 0, tx], [0, 1, ty]])
+            binary = cv2.warpAffine(binary, M, (binary.shape[1], binary.shape[0]))
+
+        # Random shape: erode (undersized), no-op, or dilate (oversized)
+        op, ksize = random.choice([
+            ('erode',  3), ('erode',  5),
+            ('none',   0),
+            ('dilate', 3), ('dilate', 5), ('dilate', 7),
+            ('dilate', 3), ('dilate', 5), ('dilate', 7),  # dilate 3× more likely
+        ])
+        if op != 'none':
+            kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (ksize, ksize))
+            if op == 'dilate':
+                binary = cv2.dilate(binary, kernel, iterations=1)
+            else:
+                binary = cv2.erode(binary, kernel, iterations=1)
+    else:
+        # Fixed kernel size for deterministic, reproducible inference results.
+        kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
+        binary = cv2.dilate(binary, kernel, iterations=1)
+
+    return binary.astype(np.float32)
+
 
 
 def blur_mask_for_loss(mask: np.ndarray, blur_pct: float,
@@ -69,11 +84,10 @@ def blur_mask_for_loss(mask: np.ndarray, blur_pct: float,
         return mask
 
     sigma = image_size * (blur_pct / 100.0)
-    
-    # Kernel size must be odd and comfortably cover exactly the ~3 sigma spread
-    ksize = int(round(sigma * 3))
-    if ksize % 2 == 0:
-        ksize += 1
+
+    # Kernel must be odd and span ≥3σ on each side (total ≥6σ + 1 pixels).
+    # Old formula (sigma*3) only covered 1.5σ per side — half the required width.
+    ksize = max(1, int(round(sigma * 6)) | 1)   # bitwise OR 1 forces odd
     
     # Needs float32 representation for cv2.GaussianBlur
     mask_blurred = cv2.GaussianBlur(mask, (ksize, ksize), sigmaX=sigma)

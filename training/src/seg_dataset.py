@@ -19,7 +19,6 @@ import numpy as np
 import torch
 from torch.utils.data import Dataset
 
-
 def _augment(img: np.ndarray, mask: np.ndarray):
     """Joint spatial + photometric augmentation."""
     if random.random() < 0.5:
@@ -70,9 +69,12 @@ class WatermarkSegDataset(Dataset):
         if self.augment:
             img, mask = _augment(img, mask)
 
-        # image: BGR → RGB, uint8 → float32 in [-1, 1]
-        rgb   = cv2.cvtColor(img, cv2.COLOR_BGR2RGB).astype(np.float32) / 127.5 - 1.0
-        img_t = torch.from_numpy(rgb.transpose(2, 0, 1))                   # 3xHxW
+        # ImageNet normalisation expected by pretrained EfficientNet encoder
+        _MEAN = np.array([0.485, 0.456, 0.406], dtype=np.float32)
+        _STD  = np.array([0.229, 0.224, 0.225], dtype=np.float32)
+        rgb   = cv2.cvtColor(img, cv2.COLOR_BGR2RGB).astype(np.float32) / 255.0
+        rgb   = (rgb - _MEAN) / _STD
+        img_t = torch.from_numpy(rgb.transpose(2, 0, 1))   # 3xHxW
 
         # mask: uint8 → float32 in [0, 1]  (soft target, not binarized)
         mask_t = torch.from_numpy(mask.astype(np.float32) / 255.0).unsqueeze(0)  # 1xHxW

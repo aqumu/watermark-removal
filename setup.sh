@@ -46,12 +46,23 @@ pip install -e pipeline/
 echo
 echo "=== Setup complete ==="
 echo
-echo "Generate the dataset (run from pipeline/ directory):"
-echo "  cd pipeline && wm-generate && cd .."
+echo "--------------------------------------------------------------"
+echo "IMPORTANT: to keep the venv active in your current shell, run:"
+echo "  source setup.sh"
+echo "instead of ./setup.sh. Or activate manually at any time with:"
+echo "  source .venv/bin/activate"
+echo "--------------------------------------------------------------"
 echo
-echo "Train the model:"
-echo "  .venv/bin/python training/train.py"
+echo "First-time workflow on a new machine:"
 echo
-echo "Run inference:"
-echo "  .venv/bin/python training/infer.py --checkpoint training/checkpoints/epoch_XXXX.pth --watermarked IMAGE --mask MASK --output result.png"
+echo "  1) Generate the dataset:"
+echo "       wm-generate --config pipeline/configs/default.yaml"
+echo
+echo "  2) Train the model:"
+echo "       cd training"
+echo "       python train.py"
+echo
+echo "  3) Run inference:"
+echo "       python infer.py --checkpoint checkpoints/best.pth \\"
+echo "           --watermarked IMAGE --mask MASK --output result.png"
 echo

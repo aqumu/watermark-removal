@@ -6,7 +6,7 @@ Each sample directory contains:
   clean.png        – original clean image (lossless ground truth)
   mask.png         – soft alpha mask (255 = fully watermarked, 0 = clean,
                      0-255 = feathered transition zone at the edge)
-  meta.json        – blend_mode, position (not used during training)
+  meta.json        – blend_mode ("srgb" | "linear"), position metadata
 
 Model input  : 5-ch tensor in [-1, 1] / [0, 1]
                (RGB watermarked, mask_input, grayscale_gradient)
@@ -20,6 +20,12 @@ Two mask tensors are distinguished:
   mask_input – dilated binary mask fed to the model as guidance.  Dilation
                guarantees the true watermark edge is always *inside* the mask,
                so the model never has to correct pixels it wasn't told about.
+
+Batch keys returned:
+  "input"      – 5×H×W model input tensor
+  "target"     – 3×H×W clean RGB tensor in [-1, 1]
+  "mask"       – 1×H×W blurred soft mask for loss weighting
+  "blend_mode" – scalar int64 tensor: 0 = sRGB, 1 = linear
 
 Note: old datasets with binary masks (0/255 only) are fully compatible —
 they load as {0.0, 1.0} float32 values, same as before.
@@ -38,7 +44,6 @@ from torch.utils.data import Dataset
 from src.image_utils import (
     compute_gradient,
     dilate_mask_input,
-    dilate_mask_for_loss,
     blur_mask_for_loss,
 )
 
@@ -47,23 +52,7 @@ from src.image_utils import (
 # helpers
 # ──────────────────────────────────────────────────────────────────────────────
 
-def _read_bgr(path: str, size: int) -> np.ndarray:
-    img = cv2.imread(str(path), cv2.IMREAD_COLOR)
-    if img is None:
-        raise FileNotFoundError(f"Cannot read {path}")
-    img = cv2.resize(img, (size, size), interpolation=cv2.INTER_AREA)
-    return img  # uint8, BGR, HxWx3
 
-
-def _read_mask(path: str, size: int) -> np.ndarray:
-    mask = cv2.imread(str(path), cv2.IMREAD_GRAYSCALE)
-    if mask is None:
-        raise FileNotFoundError(f"Cannot read {path}")
-    # Linear interpolation preserves the soft alpha gradient at watermark edges.
-    # Old binary masks (only 0/255) round-trip correctly: /255 → {0.0, 1.0}.
-    mask = cv2.resize(mask, (size, size), interpolation=cv2.INTER_LINEAR)
-    mask = mask.astype(np.float32) / 255.0  # HxW, float32 in [0, 1]
-    return mask
 
 
 def _to_tensor_rgb(bgr: np.ndarray) -> torch.Tensor:
@@ -114,6 +103,21 @@ def _augment(wm: np.ndarray, clean: np.ndarray, mask: np.ndarray):
     return wm, clean, mask
 
 
+def _jpeg_augment(wm: np.ndarray) -> np.ndarray:
+    """
+    Re-encode the watermarked image at a random JPEG quality (70–92).
+
+    The watermarked images are stored as .jpg already. Randomly varying the
+    effective quality during training teaches the model to separate watermark
+    signal from JPEG blocking/ringing artefacts, which occupy the same spatial
+    frequency band as the per-pixel white overlay correction. Applied only to
+    the watermarked image — the clean ground truth stays lossless.
+    """
+    quality = random.randint(70, 92)
+    _, encoded = cv2.imencode('.jpg', wm, [cv2.IMWRITE_JPEG_QUALITY, quality])
+    return cv2.imdecode(encoded, cv2.IMREAD_COLOR)
+
+
 # ──────────────────────────────────────────────────────────────────────────────
 # dataset
 # ──────────────────────────────────────────────────────────────────────────────
@@ -123,11 +127,11 @@ class WatermarkDataset(Dataset):
                  samples: list[Path],
                  image_size: int = 128,
                  loss_mask_blur_pct: float = 0.0,
-                 loss_mask_dilate_pct: float = 0.0):
+                 training: bool = True):
         self.samples = samples
         self.image_size = image_size
         self.loss_mask_blur_pct = loss_mask_blur_pct
-        self.loss_mask_dilate_pct = loss_mask_dilate_pct
+        self.training = training
 
     def __len__(self) -> int:
         return len(self.samples)
@@ -135,42 +139,82 @@ class WatermarkDataset(Dataset):
     def __getitem__(self, idx: int) -> dict:
         d = self.samples[idx]
 
-        wm    = _read_bgr(d / "watermarked.jpg", self.image_size)
-        clean = _read_bgr(d / "clean.png",       self.image_size)
-        mask  = _read_mask(d / "mask.png",        self.image_size)
+        wm    = self._read_image_bgr(d / "watermarked.jpg")
+        clean = self._read_image_bgr(d / "clean.png")
+        mask  = self._read_image_mask(d / "mask.png")
 
-        wm, clean, mask = _augment(wm, clean, mask)
+        # Read blend mode from metadata so the anchor delta loss can use
+        # mode-specific physics. Defaults to sRGB (0) when meta.json is absent.
+        blend_mode = 0
+        meta_path = d / "meta.json"
+        if meta_path.exists():
+            try:
+                with open(meta_path) as f:
+                    meta = json.load(f)
+                blend_mode = 1 if meta.get("blend_mode") == "linear" else 0
+            except Exception:
+                pass  # malformed meta — fall back to sRGB default
 
-        # mask_input: dilated binary mask fed to the model — ensures the true
-        # watermark edge is always inside the mask boundary.
-        mask_input = dilate_mask_input(mask)
+        if self.training:
+            wm, clean, mask = _augment(wm, clean, mask)
+            # JPEG re-compression: teaches the model to separate watermark signal
+            # from JPEG blocking/ringing artefacts. Applied after flips/jitter so
+            # the augmented exposure still sees fresh compression noise.
+            if random.random() < 0.5:
+                wm = _jpeg_augment(wm)
 
-        # loss mask: Dilate to cover compression footprint, then Gaussian-blur 
-        # so edge-focused loss terms get a smooth gradient.
-        mask_loss_base = dilate_mask_for_loss(mask, self.loss_mask_dilate_pct, self.image_size)
-        mask_loss = blur_mask_for_loss(mask_loss_base, self.loss_mask_blur_pct, self.image_size)
-
-        # explicit boundary signal
-        grad_t = compute_gradient(wm)             # 1xHxW in [0,1]
+        # loss mask: Gaussian-blur so edge-focused loss terms get a smooth gradient.
+        mask_loss = blur_mask_for_loss(mask, self.loss_mask_blur_pct, self.image_size)
 
         wm_t         = _to_tensor_rgb(wm)          # 3xHxW in [-1,1]
         clean_t      = _to_tensor_rgb(clean)        # 3xHxW in [-1,1]
-        mask_t       = _to_tensor_mask(mask_loss)   # 1xHxW in [0,1] (blurred, for loss)
-        mask_input_t = _to_tensor_mask(mask_input)  # 1xHxW in [0,1] (dilated, for model)
+        mask_loss_t  = _to_tensor_mask(mask_loss)   # 1xHxW in [0,1] (blurred, for loss)
+        mask_raw_t   = _to_tensor_mask(mask)        # 1xHxW in [0,1] (raw, for GPU dilation)
 
-        # 5-channel network input: RGB watermarked + dilated mask + gradient field
-        inp = torch.cat([wm_t, mask_input_t, grad_t], dim=0)  # 5xHxW
+        return {
+            "wm":         wm_t,          # 3xHxW
+            "target":     clean_t,       # 3xHxW
+            "mask_loss":  mask_loss_t,   # 1xHxW (blurred for criterion)
+            "mask_raw":   mask_raw_t,    # 1xHxW (raw for GPU preprocessing)
+            "blend_mode": torch.tensor(blend_mode, dtype=torch.long),
+        }
 
-        return {"input": inp, "target": clean_t, "mask": mask_t}
 
+    # ── internal loading ───────────────────────────────────────────────────
 
-# ──────────────────────────────────────────────────────────────────────────────
-# split utility
-# ──────────────────────────────────────────────────────────────────────────────
+    def _read_image_bgr(self, path: Path) -> np.ndarray:
+        # Check for pre-sized version first (efficiency cache on disk)
+        sized_path = path.with_name(f"{path.stem}_{self.image_size}{path.suffix}")
+        target_path = sized_path if sized_path.exists() else path
+        
+        with open(target_path, "rb") as f:
+            raw_bytes = f.read()
+            
+        # imdecode is much faster than imread from SSD on Windows
+        img = cv2.imdecode(np.frombuffer(raw_bytes, np.uint8), cv2.IMREAD_COLOR)
+        
+        # If we hit the fallback (non-sized path), we still need to resize
+        if target_path == path:
+            img = cv2.resize(img, (self.image_size, self.image_size), interpolation=cv2.INTER_AREA)
+        return img
+
+    def _read_image_mask(self, path: Path) -> np.ndarray:
+        # Check for pre-sized version first
+        sized_path = path.with_name(f"{path.stem}_{self.image_size}{path.suffix}")
+        target_path = sized_path if sized_path.exists() else path
+        
+        with open(target_path, "rb") as f:
+            raw_bytes = f.read()
+            
+        mask = cv2.imdecode(np.frombuffer(raw_bytes, np.uint8), cv2.IMREAD_GRAYSCALE)
+        
+        if target_path == path:
+            mask = cv2.resize(mask, (self.image_size, self.image_size), interpolation=cv2.INTER_LINEAR)
+            
+        return mask.astype(np.float32) / 255.0
 
 def make_splits(root: str, image_size: int, train_frac: float = 0.9,
                 seed: int = 42, loss_mask_blur_pct: float = 0.0,
-                loss_mask_dilate_pct: float = 0.0,
                 max_samples: int | None = None):
     """Return (train_subset, val_subset) with aug enabled only on train."""
     from torch.utils.data import Subset
@@ -194,19 +238,19 @@ def make_splits(root: str, image_size: int, train_frac: float = 0.9,
     idx = torch.randperm(len(all_samples), generator=rng).tolist()[:n]
 
     train_samples = [all_samples[i] for i in idx[:n_tr]]
-    val_samples = [all_samples[i] for i in idx[n_tr:]]
+    val_samples   = [all_samples[i] for i in idx[n_tr:]]
 
     tr_ds = WatermarkDataset(
         samples=train_samples,
         image_size=image_size,
         loss_mask_blur_pct=loss_mask_blur_pct,
-        loss_mask_dilate_pct=loss_mask_dilate_pct
+        training=True,
     )
     va_ds = WatermarkDataset(
         samples=val_samples,
         image_size=image_size,
         loss_mask_blur_pct=loss_mask_blur_pct,
-        loss_mask_dilate_pct=loss_mask_dilate_pct
+        training=False,
     )
 
     return tr_ds, va_ds

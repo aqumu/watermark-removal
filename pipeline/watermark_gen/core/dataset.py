@@ -14,6 +14,8 @@ def process_one(args):
     idx, clean_path, wm_rgba, config, output_dir = args
 
     clean = cv2.imread(str(clean_path))
+    if clean is None:
+        return None
     h, w = clean.shape[:2]
 
     # Scale watermark so its width is ~78-80% of the image width
@@ -51,11 +53,13 @@ def process_one(args):
     save_sample(output_dir, idx, clean, degraded, full_mask, meta)
 
 def generate_dataset(config):
-    clean_dir = Path(config["paths"]["clean_images_dir"])
-    wm = cv2.imread(config["paths"]["watermark_path"], cv2.IMREAD_UNCHANGED)
+    clean_dir = Path(config["paths"]["clean_images_dir"]).resolve()
+    wm = cv2.imread(str(Path(config["paths"]["watermark_path"]).resolve()), cv2.IMREAD_UNCHANGED)
+    if wm is None:
+        raise FileNotFoundError(f"Watermark not found: {config['paths']['watermark_path']}")
 
     image_exts = {".jpg", ".jpeg", ".png", ".webp"}
-    images = [p for p in clean_dir.iterdir() if p.suffix.lower() in image_exts]
+    images = [p.resolve() for p in clean_dir.iterdir() if p.suffix.lower() in image_exts]
     random.shuffle(images)
 
     num_samples = config["dataset"]["num_samples"]
@@ -69,4 +73,7 @@ def generate_dataset(config):
     ]
 
     with Pool() as p:
-        list(tqdm(p.imap(process_one, args), total=num_samples))
+        results = list(tqdm(p.imap(process_one, args), total=num_samples))
+    skipped = results.count(None)
+    if skipped:
+        print(f"[dataset] Skipped {skipped} unreadable image(s).")
