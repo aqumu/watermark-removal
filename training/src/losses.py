@@ -274,6 +274,109 @@ def background_delta_penalty(delta: torch.Tensor,
 
 
 # ──────────────────────────────────────────────────────────────────────────────
+# edge-selective refinement losses
+# ──────────────────────────────────────────────────────────────────────────────
+
+def _weighted_mean(value: torch.Tensor,
+                   weight: torch.Tensor,
+                   channels: int | None = None,
+                   eps: float = 1e-6) -> torch.Tensor:
+    """Weighted mean with stable denominator and optional channel expansion."""
+    if channels is not None and value.shape[1] != weight.shape[1]:
+        weight = weight.expand(-1, channels, -1, -1)
+    denom = weight.sum().clamp(min=eps)
+    return (value * weight).sum() / denom
+
+
+def _rgb_to_gray(x: torch.Tensor) -> torch.Tensor:
+    """Convert RGB tensor (Bx3xHxW) to luminance (Bx1xHxW)."""
+    return (0.299 * x[:, 0:1] + 0.587 * x[:, 1:2] + 0.114 * x[:, 2:3])
+
+
+def _sobel_xy(x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+    """Channel-wise Sobel gradients using depthwise grouped convolution."""
+    kx = x.new_tensor([[-1, 0, 1], [-2, 0, 2], [-1, 0, 1]], dtype=x.dtype).view(1, 1, 3, 3)
+    ky = x.new_tensor([[-1, -2, -1], [0, 0, 0], [1, 2, 1]], dtype=x.dtype).view(1, 1, 3, 3)
+    c = x.shape[1]
+    kx = kx.repeat(c, 1, 1, 1)
+    ky = ky.repeat(c, 1, 1, 1)
+    gx = F.conv2d(x, kx, padding=1, groups=c)
+    gy = F.conv2d(x, ky, padding=1, groups=c)
+    return gx, gy
+
+
+def edge_gradient_loss(pred: torch.Tensor,
+                       target: torch.Tensor,
+                       soft_mask: torch.Tensor) -> torch.Tensor:
+    """
+    Gradient-domain L1 inside the feathered edge band (4*m*(1-m)).
+    Strongly penalises coherent leftover edge traces.
+    """
+    weight = 4.0 * soft_mask * (1.0 - soft_mask)
+    pgx, pgy = _sobel_xy(pred)
+    tgx, tgy = _sobel_xy(target)
+    grad_err = (pgx - tgx).abs() + (pgy - tgy).abs()
+    return _weighted_mean(grad_err, weight, channels=pred.shape[1])
+
+
+def edge_laplacian_loss(pred: torch.Tensor,
+                        target: torch.Tensor,
+                        soft_mask: torch.Tensor) -> torch.Tensor:
+    """
+    Laplacian mismatch in the edge band.
+    Complements gradient loss by targeting ultra-thin halo/rim residues.
+    """
+    weight = 4.0 * soft_mask * (1.0 - soft_mask)
+    lap_k = pred.new_tensor([[0, 1, 0], [1, -4, 1], [0, 1, 0]], dtype=pred.dtype).view(1, 1, 3, 3)
+    c = pred.shape[1]
+    lap_k = lap_k.repeat(c, 1, 1, 1)
+    p_lap = F.conv2d(pred, lap_k, padding=1, groups=c)
+    t_lap = F.conv2d(target, lap_k, padding=1, groups=c)
+    return _weighted_mean((p_lap - t_lap).abs(), weight, channels=pred.shape[1])
+
+
+def edge_coherence_loss(pred: torch.Tensor,
+                        target: torch.Tensor,
+                        soft_mask: torch.Tensor,
+                        eps: float = 1e-6) -> torch.Tensor:
+    """
+    Penalise coherent line-like residual structure in the edge band.
+
+    Residual letter fragments produce high directional coherence in local
+    gradients; random pixel noise is isotropic and scores much lower.
+    """
+    weight = 4.0 * soft_mask * (1.0 - soft_mask)
+    residual_gray = _rgb_to_gray(pred - target)
+    rx, ry = _sobel_xy(residual_gray)
+
+    # Local structure tensor terms (windowed with 3x3 average pooling).
+    j11 = F.avg_pool2d(rx * rx, kernel_size=3, stride=1, padding=1)
+    j22 = F.avg_pool2d(ry * ry, kernel_size=3, stride=1, padding=1)
+    j12 = F.avg_pool2d(rx * ry, kernel_size=3, stride=1, padding=1)
+
+    trace = j11 + j22
+    delta = torch.sqrt((j11 - j22) ** 2 + 4.0 * (j12 ** 2) + eps)
+    coherence = delta / (trace + eps)  # [0,1], high for line-like structures
+    grad_energy = torch.sqrt(rx * rx + ry * ry + eps)
+
+    return _weighted_mean(coherence * grad_energy, weight)
+
+
+def drift_anchor_loss(pred: torch.Tensor,
+                      ref_pred: torch.Tensor,
+                      soft_mask: torch.Tensor,
+                      anchor_scale: float = 2.0) -> torch.Tensor:
+    """
+    Anchor new predictions to a frozen reference model outside the edge band.
+    Keeps already-good colour/texture behaviour unchanged while allowing local
+    edits near watermark boundaries.
+    """
+    edge_weight = 4.0 * soft_mask * (1.0 - soft_mask)
+    anchor_weight = torch.clamp(1.0 - anchor_scale * edge_weight, min=0.0, max=1.0)
+    return _weighted_mean((pred - ref_pred).abs(), anchor_weight, channels=pred.shape[1])
+
+
+# ──────────────────────────────────────────────────────────────────────────────
 # combined loss
 # ──────────────────────────────────────────────────────────────────────────────
 
@@ -304,11 +407,16 @@ class CombinedLoss(nn.Module):
         self._w_interior_tv       = _parse_weight(lc.get("interior_tv",        0.0))
         self._w_bg_delta          = _parse_weight(lc.get("bg_delta",           0.0))
         self._w_saturation        = _parse_weight(lc.get("saturation",         0.0))
+        self._w_edge_grad         = _parse_weight(lc.get("edge_grad",          0.0))
+        self._w_edge_coherence    = _parse_weight(lc.get("edge_coherence",     0.0))
+        self._w_edge_laplacian    = _parse_weight(lc.get("edge_laplacian",     0.0))
+        self._w_drift             = _parse_weight(lc.get("drift",              0.0))
 
         # Erosion kernel size for computing mask_interior.
         # Scale with image resolution: 3px at 256 → 7px at 512 preserves the
         # same proportional interior margin (~1.2% of image width).
         self._erosion_kernel = lc.get("erosion_kernel", 3)
+        self._drift_anchor_scale = float(lc.get("drift_anchor_scale", 2.0))
 
         # Current effective weights (updated by set_progress)
         self._progress = 0.0
@@ -329,6 +437,10 @@ class CombinedLoss(nn.Module):
         self.w_interior_tv       = _lerp_weight(self._w_interior_tv,       t)
         self.w_bg_delta          = _lerp_weight(self._w_bg_delta,          t)
         self.w_saturation        = _lerp_weight(self._w_saturation,        t)
+        self.w_edge_grad         = _lerp_weight(self._w_edge_grad,         t)
+        self.w_edge_coherence    = _lerp_weight(self._w_edge_coherence,    t)
+        self.w_edge_laplacian    = _lerp_weight(self._w_edge_laplacian,    t)
+        self.w_drift             = _lerp_weight(self._w_drift,             t)
 
     def set_progress(self, progress: float):
         """Set training progress (0.0 = start, 1.0 = end) to interpolate ramped weights."""
@@ -341,6 +453,7 @@ class CombinedLoss(nn.Module):
                 mask:   torch.Tensor,           # Bx1xHxW, [0,1]
                 delta:  torch.Tensor | None = None,   # Bx3xHxW, raw model output
                 wm:     torch.Tensor | None = None,   # Bx3xHxW, watermarked input [-1,1]
+                ref_pred: torch.Tensor | None = None, # Bx3xHxW, frozen reference model output
                 use_perceptual: bool = True,
                 ) -> tuple[torch.Tensor, dict]:
 
@@ -392,6 +505,22 @@ class CombinedLoss(nn.Module):
                          if (self.w_bg_delta > 0 and delta is not None)
                          else pred.new_zeros(1).squeeze())
 
+        edge_grad = (edge_gradient_loss(pred, target, mask)
+                     if self.w_edge_grad > 0
+                     else pred.new_zeros(1).squeeze())
+
+        edge_coh = (edge_coherence_loss(pred, target, mask)
+                    if self.w_edge_coherence > 0
+                    else pred.new_zeros(1).squeeze())
+
+        edge_lap = (edge_laplacian_loss(pred, target, mask)
+                    if self.w_edge_laplacian > 0
+                    else pred.new_zeros(1).squeeze())
+
+        drift_loss = (drift_anchor_loss(pred, ref_pred, mask, self._drift_anchor_scale)
+                      if (self.w_drift > 0 and ref_pred is not None)
+                      else pred.new_zeros(1).squeeze())
+
         total = (self.w_l1_masked         * l1_masked
                + self.w_perceptual        * perc_loss
                + self.w_color_moment      * cm_loss
@@ -399,7 +528,11 @@ class CombinedLoss(nn.Module):
                + self.w_border            * b_loss
                + self.w_bg_tv             * bg_tv_loss
                + self.w_interior_tv       * int_tv_loss
-               + self.w_bg_delta          * bg_delta_loss)
+               + self.w_bg_delta          * bg_delta_loss
+               + self.w_edge_grad         * edge_grad
+               + self.w_edge_coherence    * edge_coh
+               + self.w_edge_laplacian    * edge_lap
+               + self.w_drift             * drift_loss)
 
         breakdown = {
             "l1_masked":          l1_masked.item(),
@@ -410,6 +543,10 @@ class CombinedLoss(nn.Module):
             "bg_tv":              bg_tv_loss.item(),
             "interior_tv":        int_tv_loss.item(),
             "bg_delta":           bg_delta_loss.item(),
+            "edge_grad":          edge_grad.item(),
+            "edge_coherence":     edge_coh.item(),
+            "edge_laplacian":     edge_lap.item(),
+            "drift":              drift_loss.item(),
             "total":              total.item(),
             # weights for the live_plot / CSV
             "weight_l1_masked":         self.w_l1_masked,
@@ -420,5 +557,9 @@ class CombinedLoss(nn.Module):
             "weight_bg_tv":             self.w_bg_tv,
             "weight_interior_tv":       self.w_interior_tv,
             "weight_bg_delta":          self.w_bg_delta,
+            "weight_edge_grad":         self.w_edge_grad,
+            "weight_edge_coherence":    self.w_edge_coherence,
+            "weight_edge_laplacian":    self.w_edge_laplacian,
+            "weight_drift":             self.w_drift,
         }
         return total, breakdown
