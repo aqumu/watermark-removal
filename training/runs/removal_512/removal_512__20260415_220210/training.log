@@ -1,0 +1,328 @@
+Device: cuda
+Run ID: removal_512__20260415_220210
+PyTorch intra-op threads: 4
+Model: 8,985,827 trainable parameters
+Preprocessed store: C:\Users\aqumu\PycharmProjects\watermark-removal\data_gen\preprocessed_store [removal-512x256-1b28e5eaebf5]
+Visualisation sample: sample_01824
+AMP (bfloat16 mixed precision) enabled
+EMA enabled (decay=0.995)
+Resumed from C:\Users\aqumu\PycharmProjects\watermark-removal\training\runs\removal_512\removal_512__20260415_220210\artifacts\checkpoints\epoch_0009.pth (epoch 9, best PSNR 33.13)
+Training for 50 epochs on cuda
+  train: 7825 samples  val: 870 samples
+  [epoch  10 | step   10] loss=1.0028  l1_m=0.0334  perc=0.9423  sat=0.0402  cm=0.0119  border=0.0304  ecoh=0.0789  btv=0.0070  bd=0.0230  grad=10.418  lr=9.38e-04
+  [epoch  10 | step   20] loss=0.6735  l1_m=0.0213  perc=0.6220  sat=0.0246  cm=0.0077  border=0.0196  ecoh=0.0595  btv=0.0057  bd=0.0198  grad=26.777  lr=9.38e-04
+  [epoch  10 | step   30] loss=0.8771  l1_m=0.0278  perc=0.8196  sat=0.0303  cm=0.0068  border=0.0266  ecoh=0.0729  btv=0.0075  bd=0.0233  grad=20.076  lr=9.38e-04
+  [epoch  10 | step   40] loss=0.9998  l1_m=0.0321  perc=0.9410  sat=0.0347  cm=0.0134  border=0.0303  ecoh=0.0810  btv=0.0071  bd=0.0233  grad=26.675  lr=9.38e-04
+  [epoch  10 | step   50] loss=0.9571  l1_m=0.0315  perc=0.9036  sat=0.0391  cm=0.0108  border=0.0294  ecoh=0.0732  btv=0.0070  bd=0.0224  grad=6.143  lr=9.38e-04
+  [epoch  10 | step   60] loss=0.7547  l1_m=0.0250  perc=0.6241  sat=0.0269  cm=0.0087  border=0.0229  ecoh=0.0619  btv=0.0066  bd=0.0201  grad=8.272  lr=9.38e-04
+  [epoch  10 | step   70] loss=0.8012  l1_m=0.0250  perc=0.7669  sat=0.0375  cm=0.0054  border=0.0233  ecoh=0.0700  btv=0.0074  bd=0.0264  grad=10.413  lr=9.38e-04
+  [epoch  10 | step   80] loss=0.6187  l1_m=0.0189  perc=0.5483  sat=0.0224  cm=0.0039  border=0.0179  ecoh=0.0577  btv=0.0058  bd=0.0212  grad=8.315  lr=9.38e-04
+  [epoch  10 | step   90] loss=0.7910  l1_m=0.0255  perc=0.7572  sat=0.0349  cm=0.0069  border=0.0236  ecoh=0.0639  btv=0.0072  bd=0.0236  grad=9.316  lr=9.38e-04
+  [epoch  10 | step  100] loss=0.8439  l1_m=0.0268  perc=0.8314  sat=0.0311  cm=0.0088  border=0.0251  ecoh=0.0697  btv=0.0071  bd=0.0229  grad=4.340  lr=9.38e-04
+  [epoch  10 | step  110] loss=0.7688  l1_m=0.0248  perc=0.7894  sat=0.0296  cm=0.0072  border=0.0227  ecoh=0.0626  btv=0.0060  bd=0.0217  grad=17.404  lr=9.38e-04
+  [epoch  10 | step  120] loss=0.8007  l1_m=0.0253  perc=0.8502  sat=0.0400  cm=0.0092  border=0.0235  ecoh=0.0639  btv=0.0065  bd=0.0235  grad=16.305  lr=9.38e-04
+  val psnr=36.86 dB  psnr_masked=34.47 dB  [EMA]
+Epoch  10/50  loss=0.8809  psnr=34.47 dB * best  (268s)
+  [epoch  11 | step   10] loss=1.0440  l1_m=0.0332  perc=1.0751  sat=0.0396  cm=0.0143  border=0.0309  ecoh=0.0866  btv=0.0070  bd=0.0205  grad=29.782  lr=9.22e-04
+  [epoch  11 | step   20] loss=0.7219  l1_m=0.0220  perc=0.7208  sat=0.0292  cm=0.0086  border=0.0200  ecoh=0.0690  btv=0.0057  bd=0.0209  grad=6.463  lr=9.22e-04
+  [epoch  11 | step   30] loss=1.0726  l1_m=0.0337  perc=1.0985  sat=0.0370  cm=0.0094  border=0.0321  ecoh=0.0911  btv=0.0074  bd=0.0222  grad=9.779  lr=9.22e-04
+  [epoch  11 | step   40] loss=0.8066  l1_m=0.0254  perc=0.7653  sat=0.0273  cm=0.0072  border=0.0239  ecoh=0.0713  btv=0.0065  bd=0.0193  grad=4.092  lr=9.22e-04
+  [epoch  11 | step   50] loss=0.9820  l1_m=0.0314  perc=1.0104  sat=0.0332  cm=0.0065  border=0.0297  ecoh=0.0815  btv=0.0070  bd=0.0196  grad=12.764  lr=9.22e-04
+  [epoch  11 | step   60] loss=1.0377  l1_m=0.0339  perc=1.0320  sat=0.0452  cm=0.0156  border=0.0314  ecoh=0.0775  btv=0.0078  bd=0.0263  grad=13.474  lr=9.22e-04
+  [epoch  11 | step   70] loss=0.8249  l1_m=0.0274  perc=0.7277  sat=0.0323  cm=0.0080  border=0.0258  ecoh=0.0623  btv=0.0070  bd=0.0200  grad=9.849  lr=9.22e-04
+  [epoch  11 | step   80] loss=0.8401  l1_m=0.0266  perc=0.7196  sat=0.0396  cm=0.0086  border=0.0252  ecoh=0.0716  btv=0.0072  bd=0.0236  grad=15.050  lr=9.22e-04
+  [epoch  11 | step   90] loss=0.8091  l1_m=0.0252  perc=0.7630  sat=0.0294  cm=0.0068  border=0.0240  ecoh=0.0709  btv=0.0066  bd=0.0226  grad=12.726  lr=9.22e-04
+  [epoch  11 | step  100] loss=0.8700  l1_m=0.0279  perc=0.9007  sat=0.0397  cm=0.0103  border=0.0256  ecoh=0.0704  btv=0.0067  bd=0.0230  grad=15.915  lr=9.22e-04
+  [epoch  11 | step  110] loss=0.6861  l1_m=0.0220  perc=0.5849  sat=0.0271  cm=0.0081  border=0.0207  ecoh=0.0563  btv=0.0071  bd=0.0209  grad=8.878  lr=9.22e-04
+  [epoch  11 | step  120] loss=0.7469  l1_m=0.0239  perc=0.6688  sat=0.0264  cm=0.0078  border=0.0223  ecoh=0.0627  btv=0.0067  bd=0.0227  grad=8.428  lr=9.22e-04
+  val psnr=37.43 dB  psnr_masked=35.24 dB  [EMA]
+Epoch  11/50  loss=0.8711  psnr=35.24 dB * best  (243s)
+  [epoch  12 | step   10] loss=0.8435  l1_m=0.0274  perc=0.8520  sat=0.0353  cm=0.0084  border=0.0255  ecoh=0.0643  btv=0.0071  bd=0.0251  grad=12.790  lr=9.05e-04
+  [epoch  12 | step   20] loss=0.8860  l1_m=0.0274  perc=0.8886  sat=0.0388  cm=0.0055  border=0.0258  ecoh=0.0776  btv=0.0079  bd=0.0281  grad=15.153  lr=9.05e-04
+  [epoch  12 | step   30] loss=0.9329  l1_m=0.0295  perc=0.9643  sat=0.0425  cm=0.0062  border=0.0280  ecoh=0.0764  btv=0.0072  bd=0.0233  grad=18.902  lr=9.05e-04
+  [epoch  12 | step   40] loss=0.9583  l1_m=0.0308  perc=0.8768  sat=0.0406  cm=0.0109  border=0.0287  ecoh=0.0791  btv=0.0085  bd=0.0246  grad=14.720  lr=9.05e-04
+  [epoch  12 | step   50] loss=0.7425  l1_m=0.0237  perc=0.6582  sat=0.0276  cm=0.0102  border=0.0223  ecoh=0.0613  btv=0.0061  bd=0.0205  grad=21.767  lr=9.05e-04
+  [epoch  12 | step   60] loss=0.8911  l1_m=0.0283  perc=0.8201  sat=0.0331  cm=0.0074  border=0.0269  ecoh=0.0764  btv=0.0068  bd=0.0200  grad=2.835  lr=9.05e-04
+  [epoch  12 | step   70] loss=0.8778  l1_m=0.0289  perc=0.7265  sat=0.0365  cm=0.0090  border=0.0274  ecoh=0.0698  btv=0.0072  bd=0.0191  grad=21.809  lr=9.05e-04
+  [epoch  12 | step   80] loss=0.8004  l1_m=0.0256  perc=0.7013  sat=0.0307  cm=0.0098  border=0.0239  ecoh=0.0683  btv=0.0067  bd=0.0211  grad=15.209  lr=9.05e-04
+  [epoch  12 | step   90] loss=0.7284  l1_m=0.0231  perc=0.6075  sat=0.0265  cm=0.0063  border=0.0221  ecoh=0.0631  btv=0.0065  bd=0.0190  grad=9.749  lr=9.05e-04
+  [epoch  12 | step  100] loss=0.7839  l1_m=0.0238  perc=0.7529  sat=0.0286  cm=0.0072  border=0.0230  ecoh=0.0694  btv=0.0068  bd=0.0235  grad=7.506  lr=9.05e-04
+  [epoch  12 | step  110] loss=0.9188  l1_m=0.0293  perc=0.8572  sat=0.0390  cm=0.0082  border=0.0275  ecoh=0.0759  btv=0.0081  bd=0.0264  grad=6.094  lr=9.05e-04
+  [epoch  12 | step  120] loss=0.8901  l1_m=0.0280  perc=0.8206  sat=0.0371  cm=0.0069  border=0.0268  ecoh=0.0764  btv=0.0072  bd=0.0218  grad=9.073  lr=9.05e-04
+  val psnr=37.78 dB  psnr_masked=35.72 dB  [EMA]
+Epoch  12/50  loss=0.8469  psnr=35.72 dB * best  (243s)
+  [epoch  13 | step   10] loss=0.8210  l1_m=0.0259  perc=0.7320  sat=0.0316  cm=0.0097  border=0.0246  ecoh=0.0697  btv=0.0067  bd=0.0208  grad=13.607  lr=8.85e-04
+  [epoch  13 | step   20] loss=0.7926  l1_m=0.0251  perc=0.7302  sat=0.0361  cm=0.0071  border=0.0235  ecoh=0.0663  btv=0.0078  bd=0.0256  grad=12.527  lr=8.85e-04
+  [epoch  13 | step   30] loss=0.7946  l1_m=0.0244  perc=0.6872  sat=0.0321  cm=0.0049  border=0.0232  ecoh=0.0745  btv=0.0075  bd=0.0250  grad=7.432  lr=8.85e-04
+  [epoch  13 | step   40] loss=0.7515  l1_m=0.0230  perc=0.6577  sat=0.0290  cm=0.0059  border=0.0222  ecoh=0.0701  btv=0.0065  bd=0.0186  grad=8.588  lr=8.85e-04
+  [epoch  13 | step   50] loss=0.9852  l1_m=0.0311  perc=0.9998  sat=0.0380  cm=0.0110  border=0.0292  ecoh=0.0805  btv=0.0078  bd=0.0284  grad=19.332  lr=8.85e-04
+  [epoch  13 | step   60] loss=0.8683  l1_m=0.0269  perc=0.9649  sat=0.0392  cm=0.0095  border=0.0253  ecoh=0.0707  btv=0.0067  bd=0.0248  grad=7.742  lr=8.85e-04
+  [epoch  13 | step   70] loss=0.7588  l1_m=0.0230  perc=0.7784  sat=0.0298  cm=0.0048  border=0.0222  ecoh=0.0674  btv=0.0065  bd=0.0218  grad=8.090  lr=8.85e-04
+  [epoch  13 | step   80] loss=1.0117  l1_m=0.0325  perc=1.1370  sat=0.0417  cm=0.0140  border=0.0301  ecoh=0.0765  btv=0.0075  bd=0.0244  grad=22.201  lr=8.85e-04
+  [epoch  13 | step   90] loss=0.7320  l1_m=0.0232  perc=0.6471  sat=0.0302  cm=0.0078  border=0.0221  ecoh=0.0596  btv=0.0068  bd=0.0227  grad=8.128  lr=8.85e-04
+  [epoch  13 | step  100] loss=1.0070  l1_m=0.0326  perc=0.9580  sat=0.0391  cm=0.0089  border=0.0309  ecoh=0.0796  btv=0.0081  bd=0.0242  grad=18.891  lr=8.85e-04
+  [epoch  13 | step  110] loss=0.9043  l1_m=0.0288  perc=0.9692  sat=0.0360  cm=0.0137  border=0.0263  ecoh=0.0717  btv=0.0076  bd=0.0265  grad=7.732  lr=8.85e-04
+  [epoch  13 | step  120] loss=0.8039  l1_m=0.0246  perc=0.8057  sat=0.0322  cm=0.0058  border=0.0238  ecoh=0.0715  btv=0.0059  bd=0.0182  grad=10.402  lr=8.85e-04
+  val psnr=37.99 dB  psnr_masked=36.03 dB  [EMA]
+Epoch  13/50  loss=0.8360  psnr=36.03 dB * best  (243s)
+  [epoch  14 | step   10] loss=0.8220  l1_m=0.0261  perc=0.7557  sat=0.0311  cm=0.0079  border=0.0245  ecoh=0.0701  btv=0.0071  bd=0.0217  grad=13.587  lr=8.65e-04
+  [epoch  14 | step   20] loss=0.8482  l1_m=0.0259  perc=0.8328  sat=0.0379  cm=0.0062  border=0.0249  ecoh=0.0758  btv=0.0073  bd=0.0210  grad=14.099  lr=8.65e-04
+  [epoch  14 | step   30] loss=0.8168  l1_m=0.0256  perc=0.7400  sat=0.0299  cm=0.0091  border=0.0238  ecoh=0.0732  btv=0.0067  bd=0.0231  grad=8.355  lr=8.65e-04
+  [epoch  14 | step   40] loss=0.7527  l1_m=0.0245  perc=0.7270  sat=0.0350  cm=0.0083  border=0.0227  ecoh=0.0580  btv=0.0069  bd=0.0218  grad=6.927  lr=8.65e-04
+  [epoch  14 | step   50] loss=0.7425  l1_m=0.0235  perc=0.6432  sat=0.0294  cm=0.0076  border=0.0222  ecoh=0.0638  btv=0.0068  bd=0.0215  grad=13.631  lr=8.65e-04
+  [epoch  14 | step   60] loss=0.7102  l1_m=0.0226  perc=0.6379  sat=0.0238  cm=0.0089  border=0.0213  ecoh=0.0596  btv=0.0065  bd=0.0188  grad=11.274  lr=8.65e-04
+  [epoch  14 | step   70] loss=0.7513  l1_m=0.0233  perc=0.6823  sat=0.0289  cm=0.0065  border=0.0220  ecoh=0.0686  btv=0.0065  bd=0.0199  grad=15.978  lr=8.65e-04
+  [epoch  14 | step   80] loss=0.9790  l1_m=0.0309  perc=0.9046  sat=0.0413  cm=0.0075  border=0.0293  ecoh=0.0832  btv=0.0090  bd=0.0276  grad=13.205  lr=8.65e-04
+  [epoch  14 | step   90] loss=0.6434  l1_m=0.0209  perc=0.4882  sat=0.0271  cm=0.0064  border=0.0195  ecoh=0.0536  btv=0.0070  bd=0.0215  grad=8.687  lr=8.65e-04
+  [epoch  14 | step  100] loss=0.7551  l1_m=0.0229  perc=0.6578  sat=0.0263  cm=0.0058  border=0.0220  ecoh=0.0716  btv=0.0072  bd=0.0229  grad=12.460  lr=8.65e-04
+  [epoch  14 | step  110] loss=0.7511  l1_m=0.0241  perc=0.6997  sat=0.0292  cm=0.0088  border=0.0230  ecoh=0.0590  btv=0.0066  bd=0.0185  grad=6.502  lr=8.65e-04
+  [epoch  14 | step  120] loss=0.7948  l1_m=0.0249  perc=0.7821  sat=0.0362  cm=0.0098  border=0.0233  ecoh=0.0643  btv=0.0084  bd=0.0278  grad=15.432  lr=8.65e-04
+  val psnr=38.14 dB  psnr_masked=36.24 dB  [EMA]
+Epoch  14/50  loss=0.8229  psnr=36.24 dB * best  (243s)
+  [epoch  15 | step   10] loss=0.8462  l1_m=0.0271  perc=0.7086  sat=0.0326  cm=0.0061  border=0.0254  ecoh=0.0738  btv=0.0079  bd=0.0239  grad=10.343  lr=8.42e-04
+  [epoch  15 | step   20] loss=0.8801  l1_m=0.0273  perc=0.8581  sat=0.0329  cm=0.0105  border=0.0256  ecoh=0.0783  btv=0.0067  bd=0.0214  grad=14.969  lr=8.42e-04
+  [epoch  15 | step   30] loss=0.8943  l1_m=0.0289  perc=0.8231  sat=0.0349  cm=0.0121  border=0.0267  ecoh=0.0739  btv=0.0070  bd=0.0222  grad=11.900  lr=8.42e-04
+  [epoch  15 | step   40] loss=1.0139  l1_m=0.0330  perc=0.9576  sat=0.0362  cm=0.0099  border=0.0310  ecoh=0.0804  btv=0.0082  bd=0.0239  grad=10.971  lr=8.42e-04
+  [epoch  15 | step   50] loss=0.7390  l1_m=0.0234  perc=0.6582  sat=0.0273  cm=0.0062  border=0.0219  ecoh=0.0648  btv=0.0066  bd=0.0210  grad=13.495  lr=8.42e-04
+  [epoch  15 | step   60] loss=0.8405  l1_m=0.0270  perc=0.8141  sat=0.0402  cm=0.0097  border=0.0254  ecoh=0.0650  btv=0.0074  bd=0.0234  grad=9.073  lr=8.42e-04
+  [epoch  15 | step   70] loss=0.8248  l1_m=0.0261  perc=0.8373  sat=0.0428  cm=0.0086  border=0.0241  ecoh=0.0684  btv=0.0070  bd=0.0240  grad=15.585  lr=8.42e-04
+  [epoch  15 | step   80] loss=0.8550  l1_m=0.0275  perc=0.6947  sat=0.0345  cm=0.0136  border=0.0254  ecoh=0.0716  btv=0.0076  bd=0.0263  grad=31.800  lr=8.42e-04
+  [epoch  15 | step   90] loss=0.9010  l1_m=0.0285  perc=1.0162  sat=0.0385  cm=0.0110  border=0.0267  ecoh=0.0690  btv=0.0078  bd=0.0241  grad=19.686  lr=8.42e-04
+  [epoch  15 | step  100] loss=0.7436  l1_m=0.0234  perc=0.6684  sat=0.0315  cm=0.0079  border=0.0218  ecoh=0.0648  btv=0.0070  bd=0.0227  grad=24.619  lr=8.42e-04
+  [epoch  15 | step  110] loss=0.6393  l1_m=0.0198  perc=0.5088  sat=0.0266  cm=0.0066  border=0.0187  ecoh=0.0595  btv=0.0063  bd=0.0197  grad=11.465  lr=8.42e-04
+  [epoch  15 | step  120] loss=0.9589  l1_m=0.0294  perc=1.0219  sat=0.0407  cm=0.0071  border=0.0281  ecoh=0.0813  btv=0.0086  bd=0.0284  grad=13.288  lr=8.42e-04
+  val psnr=38.23 dB  psnr_masked=36.38 dB  [EMA]
+Epoch  15/50  loss=0.8268  psnr=36.38 dB * best  (242s)
+  [epoch  16 | step   10] loss=0.8711  l1_m=0.0264  perc=0.8252  sat=0.0369  cm=0.0080  border=0.0249  ecoh=0.0814  btv=0.0080  bd=0.0258  grad=10.276  lr=8.19e-04
+  [epoch  16 | step   20] loss=0.9324  l1_m=0.0290  perc=1.0361  sat=0.0361  cm=0.0113  border=0.0272  ecoh=0.0775  btv=0.0067  bd=0.0231  grad=16.377  lr=8.19e-04
+  [epoch  16 | step   30] loss=0.7100  l1_m=0.0225  perc=0.5824  sat=0.0323  cm=0.0072  border=0.0212  ecoh=0.0593  btv=0.0081  bd=0.0254  grad=8.119  lr=8.19e-04
+  [epoch  16 | step   40] loss=0.6321  l1_m=0.0203  perc=0.5435  sat=0.0231  cm=0.0081  border=0.0189  ecoh=0.0522  btv=0.0061  bd=0.0201  grad=6.826  lr=8.19e-04
+  [epoch  16 | step   50] loss=0.7196  l1_m=0.0219  perc=0.6400  sat=0.0256  cm=0.0062  border=0.0206  ecoh=0.0700  btv=0.0063  bd=0.0204  grad=16.647  lr=8.19e-04
+  [epoch  16 | step   60] loss=0.8093  l1_m=0.0255  perc=0.7158  sat=0.0362  cm=0.0069  border=0.0243  ecoh=0.0693  btv=0.0072  bd=0.0216  grad=5.957  lr=8.19e-04
+  [epoch  16 | step   70] loss=0.7267  l1_m=0.0233  perc=0.7103  sat=0.0315  cm=0.0068  border=0.0215  ecoh=0.0589  btv=0.0069  bd=0.0231  grad=14.149  lr=8.19e-04
+  [epoch  16 | step   80] loss=0.8270  l1_m=0.0259  perc=0.8212  sat=0.0369  cm=0.0084  border=0.0247  ecoh=0.0666  btv=0.0077  bd=0.0245  grad=13.022  lr=8.19e-04
+  [epoch  16 | step   90] loss=0.7541  l1_m=0.0240  perc=0.6435  sat=0.0291  cm=0.0088  border=0.0224  ecoh=0.0658  btv=0.0070  bd=0.0205  grad=23.175  lr=8.19e-04
+  [epoch  16 | step  100] loss=0.8041  l1_m=0.0246  perc=0.7639  sat=0.0329  cm=0.0062  border=0.0236  ecoh=0.0718  btv=0.0075  bd=0.0236  grad=9.182  lr=8.19e-04
+  [epoch  16 | step  110] loss=0.7660  l1_m=0.0237  perc=0.7615  sat=0.0283  cm=0.0060  border=0.0228  ecoh=0.0638  btv=0.0075  bd=0.0237  grad=9.519  lr=8.19e-04
+  [epoch  16 | step  120] loss=0.9286  l1_m=0.0289  perc=1.0032  sat=0.0437  cm=0.0071  border=0.0276  ecoh=0.0739  btv=0.0087  bd=0.0275  grad=9.192  lr=8.19e-04
+  val psnr=38.31 dB  psnr_masked=36.49 dB  [EMA]
+Epoch  16/50  loss=0.8055  psnr=36.49 dB * best  (249s)
+  [epoch  17 | step   10] loss=0.7513  l1_m=0.0237  perc=0.6302  sat=0.0356  cm=0.0056  border=0.0226  ecoh=0.0649  btv=0.0073  bd=0.0221  grad=11.714  lr=7.94e-04
+  [epoch  17 | step   20] loss=0.6938  l1_m=0.0222  perc=0.5571  sat=0.0265  cm=0.0066  border=0.0210  ecoh=0.0586  btv=0.0074  bd=0.0216  grad=19.584  lr=7.94e-04
+  [epoch  17 | step   30] loss=0.8451  l1_m=0.0279  perc=0.7993  sat=0.0389  cm=0.0064  border=0.0262  ecoh=0.0642  btv=0.0077  bd=0.0194  grad=4.778  lr=7.94e-04
+  [epoch  17 | step   40] loss=0.8024  l1_m=0.0256  perc=0.7619  sat=0.0371  cm=0.0073  border=0.0238  ecoh=0.0651  btv=0.0081  bd=0.0270  grad=9.621  lr=7.94e-04
+  [epoch  17 | step   50] loss=0.8530  l1_m=0.0268  perc=0.9785  sat=0.0482  cm=0.0104  border=0.0251  ecoh=0.0642  btv=0.0071  bd=0.0236  grad=19.051  lr=7.94e-04
+  [epoch  17 | step   60] loss=0.8168  l1_m=0.0253  perc=0.8016  sat=0.0330  cm=0.0068  border=0.0240  ecoh=0.0706  btv=0.0072  bd=0.0246  grad=15.262  lr=7.94e-04
+  [epoch  17 | step   70] loss=0.7975  l1_m=0.0253  perc=0.7667  sat=0.0392  cm=0.0071  border=0.0238  ecoh=0.0640  btv=0.0082  bd=0.0257  grad=8.916  lr=7.94e-04
+  [epoch  17 | step   80] loss=0.7068  l1_m=0.0222  perc=0.5989  sat=0.0289  cm=0.0057  border=0.0209  ecoh=0.0625  btv=0.0071  bd=0.0238  grad=17.396  lr=7.94e-04
+  [epoch  17 | step   90] loss=0.8230  l1_m=0.0260  perc=0.7533  sat=0.0368  cm=0.0063  border=0.0246  ecoh=0.0684  btv=0.0085  bd=0.0262  grad=6.513  lr=7.94e-04
+  [epoch  17 | step  100] loss=0.8363  l1_m=0.0265  perc=0.7125  sat=0.0304  cm=0.0072  border=0.0256  ecoh=0.0718  btv=0.0079  bd=0.0186  grad=17.802  lr=7.94e-04
+  [epoch  17 | step  110] loss=0.8536  l1_m=0.0267  perc=0.8644  sat=0.0328  cm=0.0123  border=0.0245  ecoh=0.0752  btv=0.0064  bd=0.0212  grad=32.538  lr=7.94e-04
+  [epoch  17 | step  120] loss=0.8694  l1_m=0.0271  perc=0.8721  sat=0.0325  cm=0.0075  border=0.0258  ecoh=0.0743  btv=0.0070  bd=0.0217  grad=18.227  lr=7.94e-04
+  val psnr=38.37 dB  psnr_masked=36.57 dB  [EMA]
+Epoch  17/50  loss=0.8220  psnr=36.57 dB * best  (246s)
+  [epoch  18 | step   10] loss=0.7630  l1_m=0.0238  perc=0.6411  sat=0.0277  cm=0.0060  border=0.0225  ecoh=0.0712  btv=0.0071  bd=0.0192  grad=6.744  lr=7.68e-04
+  [epoch  18 | step   20] loss=0.9947  l1_m=0.0309  perc=1.0503  sat=0.0405  cm=0.0089  border=0.0296  ecoh=0.0823  btv=0.0078  bd=0.0248  grad=8.649  lr=7.68e-04
+  [epoch  18 | step   30] loss=0.8804  l1_m=0.0275  perc=0.8639  sat=0.0352  cm=0.0057  border=0.0263  ecoh=0.0759  btv=0.0078  bd=0.0220  grad=2.733  lr=7.68e-04
+  [epoch  18 | step   40] loss=0.6362  l1_m=0.0199  perc=0.5560  sat=0.0244  cm=0.0072  border=0.0187  ecoh=0.0558  btv=0.0058  bd=0.0196  grad=8.299  lr=7.68e-04
+  [epoch  18 | step   50] loss=0.7274  l1_m=0.0229  perc=0.6031  sat=0.0291  cm=0.0056  border=0.0221  ecoh=0.0624  btv=0.0072  bd=0.0204  grad=14.986  lr=7.68e-04
+  [epoch  18 | step   60] loss=0.7232  l1_m=0.0222  perc=0.6308  sat=0.0291  cm=0.0076  border=0.0212  ecoh=0.0657  btv=0.0069  bd=0.0200  grad=5.379  lr=7.68e-04
+  [epoch  18 | step   70] loss=0.7009  l1_m=0.0224  perc=0.5593  sat=0.0273  cm=0.0061  border=0.0211  ecoh=0.0587  btv=0.0086  bd=0.0257  grad=18.195  lr=7.68e-04
+  [epoch  18 | step   80] loss=0.9045  l1_m=0.0288  perc=0.7950  sat=0.0282  cm=0.0123  border=0.0270  ecoh=0.0787  btv=0.0068  bd=0.0199  grad=28.979  lr=7.68e-04
+  [epoch  18 | step   90] loss=0.8519  l1_m=0.0260  perc=0.8344  sat=0.0384  cm=0.0055  border=0.0248  ecoh=0.0773  btv=0.0077  bd=0.0226  grad=17.178  lr=7.68e-04
+  [epoch  18 | step  100] loss=0.6671  l1_m=0.0206  perc=0.6009  sat=0.0278  cm=0.0054  border=0.0196  ecoh=0.0586  btv=0.0066  bd=0.0234  grad=10.241  lr=7.68e-04
+  [epoch  18 | step  110] loss=0.9639  l1_m=0.0307  perc=1.0703  sat=0.0444  cm=0.0083  border=0.0288  ecoh=0.0750  btv=0.0082  bd=0.0243  grad=5.545  lr=7.68e-04
+  [epoch  18 | step  120] loss=0.7604  l1_m=0.0238  perc=0.7762  sat=0.0378  cm=0.0048  border=0.0228  ecoh=0.0610  btv=0.0079  bd=0.0225  grad=10.755  lr=7.68e-04
+  val psnr=38.42 dB  psnr_masked=36.64 dB  [EMA]
+Epoch  18/50  loss=0.8029  psnr=36.64 dB * best  (245s)
+  [epoch  19 | step   10] loss=0.7424  l1_m=0.0224  perc=0.7324  sat=0.0305  cm=0.0052  border=0.0215  ecoh=0.0657  btv=0.0077  bd=0.0260  grad=6.322  lr=7.41e-04
+  [epoch  19 | step   20] loss=0.8885  l1_m=0.0274  perc=0.9030  sat=0.0400  cm=0.0087  border=0.0259  ecoh=0.0741  btv=0.0084  bd=0.0301  grad=17.248  lr=7.41e-04
+  [epoch  19 | step   30] loss=0.8034  l1_m=0.0250  perc=0.7557  sat=0.0308  cm=0.0064  border=0.0238  ecoh=0.0708  btv=0.0075  bd=0.0215  grad=13.886  lr=7.41e-04
+  [epoch  19 | step   40] loss=0.8125  l1_m=0.0260  perc=0.7469  sat=0.0409  cm=0.0090  border=0.0246  ecoh=0.0650  btv=0.0076  bd=0.0213  grad=23.571  lr=7.41e-04
+  [epoch  19 | step   50] loss=0.6983  l1_m=0.0214  perc=0.6883  sat=0.0284  cm=0.0042  border=0.0204  ecoh=0.0602  btv=0.0073  bd=0.0249  grad=7.525  lr=7.41e-04
+  [epoch  19 | step   60] loss=0.5778  l1_m=0.0177  perc=0.4996  sat=0.0212  cm=0.0045  border=0.0169  ecoh=0.0533  btv=0.0059  bd=0.0188  grad=11.855  lr=7.41e-04
+  [epoch  19 | step   70] loss=0.8336  l1_m=0.0270  perc=0.6442  sat=0.0358  cm=0.0094  border=0.0256  ecoh=0.0689  btv=0.0080  bd=0.0218  grad=19.166  lr=7.41e-04
+  [epoch  19 | step   80] loss=0.7767  l1_m=0.0252  perc=0.6438  sat=0.0281  cm=0.0072  border=0.0237  ecoh=0.0632  btv=0.0080  bd=0.0238  grad=18.389  lr=7.41e-04
+  [epoch  19 | step   90] loss=0.6903  l1_m=0.0215  perc=0.6086  sat=0.0302  cm=0.0035  border=0.0202  ecoh=0.0619  btv=0.0076  bd=0.0239  grad=5.653  lr=7.41e-04
+  [epoch  19 | step  100] loss=0.7946  l1_m=0.0250  perc=0.6652  sat=0.0288  cm=0.0079  border=0.0235  ecoh=0.0719  btv=0.0070  bd=0.0225  grad=14.372  lr=7.41e-04
+  [epoch  19 | step  110] loss=0.7809  l1_m=0.0247  perc=0.6705  sat=0.0354  cm=0.0078  border=0.0233  ecoh=0.0647  btv=0.0092  bd=0.0271  grad=11.520  lr=7.41e-04
+  [epoch  19 | step  120] loss=0.7840  l1_m=0.0239  perc=0.6955  sat=0.0292  cm=0.0043  border=0.0235  ecoh=0.0718  btv=0.0071  bd=0.0194  grad=9.222  lr=7.41e-04
+  val psnr=38.48 dB  psnr_masked=36.72 dB  [EMA]
+Epoch  19/50  loss=0.7862  psnr=36.72 dB * best  (245s)
+  [epoch  20 | step   10] loss=0.8203  l1_m=0.0264  perc=0.7682  sat=0.0378  cm=0.0119  border=0.0245  ecoh=0.0648  btv=0.0072  bd=0.0226  grad=19.246  lr=7.13e-04
+  [epoch  20 | step   20] loss=0.7811  l1_m=0.0246  perc=0.7202  sat=0.0356  cm=0.0059  border=0.0234  ecoh=0.0646  btv=0.0081  bd=0.0243  grad=11.634  lr=7.13e-04
+  [epoch  20 | step   30] loss=0.7753  l1_m=0.0239  perc=0.6911  sat=0.0277  cm=0.0044  border=0.0227  ecoh=0.0721  btv=0.0080  bd=0.0225  grad=5.850  lr=7.13e-04
+  [epoch  20 | step   40] loss=0.8379  l1_m=0.0255  perc=0.9482  sat=0.0442  cm=0.0093  border=0.0241  ecoh=0.0689  btv=0.0075  bd=0.0256  grad=12.668  lr=7.13e-04
+  [epoch  20 | step   50] loss=0.9272  l1_m=0.0297  perc=0.9420  sat=0.0387  cm=0.0130  border=0.0276  ecoh=0.0732  btv=0.0073  bd=0.0240  grad=19.144  lr=7.13e-04
+  [epoch  20 | step   60] loss=0.8298  l1_m=0.0251  perc=0.8714  sat=0.0340  cm=0.0056  border=0.0241  ecoh=0.0741  btv=0.0072  bd=0.0235  grad=4.452  lr=7.13e-04
+  [epoch  20 | step   70] loss=0.9326  l1_m=0.0302  perc=0.7631  sat=0.0367  cm=0.0059  border=0.0285  ecoh=0.0788  btv=0.0091  bd=0.0261  grad=6.887  lr=7.13e-04
+  [epoch  20 | step   80] loss=0.8490  l1_m=0.0264  perc=0.7978  sat=0.0396  cm=0.0057  border=0.0256  ecoh=0.0708  btv=0.0081  bd=0.0240  grad=8.551  lr=7.13e-04
+  [epoch  20 | step   90] loss=0.6803  l1_m=0.0214  perc=0.5320  sat=0.0219  cm=0.0051  border=0.0207  ecoh=0.0601  btv=0.0069  bd=0.0187  grad=8.882  lr=7.13e-04
+  [epoch  20 | step  100] loss=0.7464  l1_m=0.0226  perc=0.6769  sat=0.0299  cm=0.0060  border=0.0213  ecoh=0.0698  btv=0.0084  bd=0.0268  grad=11.902  lr=7.13e-04
+  [epoch  20 | step  110] loss=0.8443  l1_m=0.0264  perc=0.7431  sat=0.0376  cm=0.0065  border=0.0247  ecoh=0.0771  btv=0.0076  bd=0.0233  grad=7.188  lr=7.13e-04
+  [epoch  20 | step  120] loss=0.6810  l1_m=0.0214  perc=0.6246  sat=0.0257  cm=0.0053  border=0.0205  ecoh=0.0566  btv=0.0070  bd=0.0215  grad=12.344  lr=7.13e-04
+  val psnr=38.54 dB  psnr_masked=36.79 dB  [EMA]
+Epoch  20/50  loss=0.7852  psnr=36.79 dB * best  (245s)
+  [epoch  21 | step   10] loss=0.9382  l1_m=0.0294  perc=0.8549  sat=0.0325  cm=0.0104  border=0.0272  ecoh=0.0875  btv=0.0070  bd=0.0217  grad=10.042  lr=6.84e-04
+  [epoch  21 | step   20] loss=0.8949  l1_m=0.0275  perc=0.9111  sat=0.0308  cm=0.0055  border=0.0263  ecoh=0.0802  btv=0.0073  bd=0.0228  grad=10.739  lr=6.84e-04
+  [epoch  21 | step   30] loss=0.9540  l1_m=0.0304  perc=0.7629  sat=0.0381  cm=0.0100  border=0.0286  ecoh=0.0840  btv=0.0088  bd=0.0262  grad=16.635  lr=6.84e-04
+  [epoch  21 | step   40] loss=0.7007  l1_m=0.0220  perc=0.5820  sat=0.0305  cm=0.0036  border=0.0212  ecoh=0.0591  btv=0.0085  bd=0.0252  grad=5.310  lr=6.84e-04
+  [epoch  21 | step   50] loss=0.9470  l1_m=0.0308  perc=0.8470  sat=0.0401  cm=0.0146  border=0.0284  ecoh=0.0770  btv=0.0078  bd=0.0224  grad=21.831  lr=6.84e-04
+  [epoch  21 | step   60] loss=0.8347  l1_m=0.0259  perc=0.7568  sat=0.0373  cm=0.0042  border=0.0251  ecoh=0.0727  btv=0.0084  bd=0.0232  grad=10.778  lr=6.84e-04
+  [epoch  21 | step   70] loss=0.9118  l1_m=0.0282  perc=0.9333  sat=0.0365  cm=0.0096  border=0.0267  ecoh=0.0776  btv=0.0088  bd=0.0249  grad=12.565  lr=6.84e-04
+  [epoch  21 | step   80] loss=0.8682  l1_m=0.0278  perc=0.8232  sat=0.0374  cm=0.0110  border=0.0263  ecoh=0.0672  btv=0.0080  bd=0.0247  grad=15.765  lr=6.84e-04
+  [epoch  21 | step   90] loss=0.7923  l1_m=0.0248  perc=0.7510  sat=0.0329  cm=0.0057  border=0.0239  ecoh=0.0656  btv=0.0079  bd=0.0236  grad=13.851  lr=6.84e-04
+  [epoch  21 | step  100] loss=0.6848  l1_m=0.0212  perc=0.6289  sat=0.0261  cm=0.0066  border=0.0199  ecoh=0.0615  btv=0.0068  bd=0.0208  grad=8.009  lr=6.84e-04
+  [epoch  21 | step  110] loss=0.8041  l1_m=0.0251  perc=0.7419  sat=0.0350  cm=0.0058  border=0.0237  ecoh=0.0700  btv=0.0081  bd=0.0252  grad=21.637  lr=6.84e-04
+  [epoch  21 | step  120] loss=0.8670  l1_m=0.0273  perc=0.7892  sat=0.0413  cm=0.0076  border=0.0258  ecoh=0.0719  btv=0.0096  bd=0.0287  grad=5.128  lr=6.84e-04
+  val psnr=38.58 dB  psnr_masked=36.85 dB  [EMA]
+Epoch  21/50  loss=0.7832  psnr=36.85 dB * best  (245s)
+  [epoch  22 | step   10] loss=0.5720  l1_m=0.0173  perc=0.4774  sat=0.0222  cm=0.0045  border=0.0163  ecoh=0.0554  btv=0.0066  bd=0.0208  grad=11.518  lr=6.55e-04
+  [epoch  22 | step   20] loss=0.8240  l1_m=0.0253  perc=0.7200  sat=0.0320  cm=0.0068  border=0.0242  ecoh=0.0748  btv=0.0089  bd=0.0260  grad=17.740  lr=6.55e-04
+  [epoch  22 | step   30] loss=0.8589  l1_m=0.0272  perc=0.7883  sat=0.0369  cm=0.0048  border=0.0259  ecoh=0.0728  btv=0.0082  bd=0.0239  grad=15.283  lr=6.55e-04
+  [epoch  22 | step   40] loss=0.9870  l1_m=0.0293  perc=1.1552  sat=0.0497  cm=0.0101  border=0.0277  ecoh=0.0860  btv=0.0085  bd=0.0302  grad=23.467  lr=6.55e-04
+  [epoch  22 | step   50] loss=0.6658  l1_m=0.0215  perc=0.5718  sat=0.0300  cm=0.0092  border=0.0202  ecoh=0.0519  btv=0.0071  bd=0.0206  grad=24.187  lr=6.55e-04
+  [epoch  22 | step   60] loss=0.8060  l1_m=0.0245  perc=0.8033  sat=0.0320  cm=0.0076  border=0.0237  ecoh=0.0697  btv=0.0074  bd=0.0237  grad=19.432  lr=6.55e-04
+  [epoch  22 | step   70] loss=0.7569  l1_m=0.0246  perc=0.6739  sat=0.0400  cm=0.0064  border=0.0228  ecoh=0.0609  btv=0.0077  bd=0.0218  grad=12.912  lr=6.55e-04
+  [epoch  22 | step   80] loss=0.7779  l1_m=0.0242  perc=0.7193  sat=0.0320  cm=0.0053  border=0.0232  ecoh=0.0672  btv=0.0081  bd=0.0224  grad=5.933  lr=6.55e-04
+  [epoch  22 | step   90] loss=0.7693  l1_m=0.0241  perc=0.6495  sat=0.0324  cm=0.0045  border=0.0233  ecoh=0.0670  btv=0.0078  bd=0.0220  grad=11.053  lr=6.55e-04
+  [epoch  22 | step  100] loss=0.8239  l1_m=0.0263  perc=0.6401  sat=0.0342  cm=0.0083  border=0.0249  ecoh=0.0711  btv=0.0079  bd=0.0240  grad=16.656  lr=6.55e-04
+  [epoch  22 | step  110] loss=0.6856  l1_m=0.0207  perc=0.6283  sat=0.0249  cm=0.0062  border=0.0202  ecoh=0.0624  btv=0.0061  bd=0.0195  grad=9.543  lr=6.55e-04
+  [epoch  22 | step  120] loss=0.8824  l1_m=0.0277  perc=0.8699  sat=0.0373  cm=0.0118  border=0.0260  ecoh=0.0735  btv=0.0082  bd=0.0230  grad=24.526  lr=6.55e-04
+  val psnr=38.61 dB  psnr_masked=36.90 dB  [EMA]
+Epoch  22/50  loss=0.7814  psnr=36.90 dB * best  (246s)
+  [epoch  23 | step   10] loss=0.8764  l1_m=0.0280  perc=0.8875  sat=0.0349  cm=0.0147  border=0.0259  ecoh=0.0670  btv=0.0083  bd=0.0274  grad=19.924  lr=6.25e-04
+  [epoch  23 | step   20] loss=0.7853  l1_m=0.0246  perc=0.6980  sat=0.0308  cm=0.0056  border=0.0235  ecoh=0.0684  btv=0.0077  bd=0.0228  grad=15.317  lr=6.25e-04
+  [epoch  23 | step   30] loss=0.7233  l1_m=0.0225  perc=0.6012  sat=0.0273  cm=0.0058  border=0.0216  ecoh=0.0644  btv=0.0078  bd=0.0217  grad=8.041  lr=6.25e-04
+  [epoch  23 | step   40] loss=0.8610  l1_m=0.0264  perc=0.8165  sat=0.0354  cm=0.0083  border=0.0252  ecoh=0.0775  btv=0.0075  bd=0.0224  grad=3.215  lr=6.25e-04
+  [epoch  23 | step   50] loss=0.8480  l1_m=0.0263  perc=0.7796  sat=0.0348  cm=0.0081  border=0.0250  ecoh=0.0732  btv=0.0088  bd=0.0259  grad=18.663  lr=6.25e-04
+  [epoch  23 | step   60] loss=0.7688  l1_m=0.0232  perc=0.7803  sat=0.0318  cm=0.0037  border=0.0223  ecoh=0.0703  btv=0.0070  bd=0.0224  grad=8.924  lr=6.25e-04
+  [epoch  23 | step   70] loss=0.9050  l1_m=0.0284  perc=0.9999  sat=0.0448  cm=0.0106  border=0.0262  ecoh=0.0721  btv=0.0090  bd=0.0273  grad=17.466  lr=6.25e-04
+  [epoch  23 | step   80] loss=0.8520  l1_m=0.0265  perc=0.6958  sat=0.0283  cm=0.0045  border=0.0255  ecoh=0.0806  btv=0.0079  bd=0.0202  grad=11.049  lr=6.25e-04
+  [epoch  23 | step   90] loss=0.6850  l1_m=0.0213  perc=0.6611  sat=0.0306  cm=0.0046  border=0.0202  ecoh=0.0579  btv=0.0077  bd=0.0239  grad=2.889  lr=6.25e-04
+  [epoch  23 | step  100] loss=0.8368  l1_m=0.0264  perc=0.8083  sat=0.0408  cm=0.0070  border=0.0247  ecoh=0.0689  btv=0.0091  bd=0.0279  grad=10.587  lr=6.25e-04
+  [epoch  23 | step  110] loss=0.7096  l1_m=0.0227  perc=0.6280  sat=0.0280  cm=0.0056  border=0.0217  ecoh=0.0579  btv=0.0068  bd=0.0193  grad=8.096  lr=6.25e-04
+  [epoch  23 | step  120] loss=0.7833  l1_m=0.0244  perc=0.7323  sat=0.0346  cm=0.0065  border=0.0230  ecoh=0.0675  btv=0.0081  bd=0.0252  grad=13.902  lr=6.25e-04
+  val psnr=38.65 dB  psnr_masked=36.95 dB  [EMA]
+Epoch  23/50  loss=0.7698  psnr=36.95 dB * best  (247s)
+  [epoch  24 | step   10] loss=0.6554  l1_m=0.0200  perc=0.5659  sat=0.0285  cm=0.0036  border=0.0193  ecoh=0.0576  btv=0.0083  bd=0.0264  grad=9.269  lr=5.94e-04
+  [epoch  24 | step   20] loss=0.6987  l1_m=0.0216  perc=0.5807  sat=0.0245  cm=0.0047  border=0.0206  ecoh=0.0650  btv=0.0070  bd=0.0214  grad=7.485  lr=5.94e-04
+  [epoch  24 | step   30] loss=0.7316  l1_m=0.0230  perc=0.5935  sat=0.0291  cm=0.0055  border=0.0218  ecoh=0.0658  btv=0.0078  bd=0.0208  grad=4.026  lr=5.94e-04
+  [epoch  24 | step   40] loss=0.7520  l1_m=0.0231  perc=0.7628  sat=0.0341  cm=0.0052  border=0.0224  ecoh=0.0623  btv=0.0074  bd=0.0237  grad=11.838  lr=5.94e-04
+  [epoch  24 | step   50] loss=0.8383  l1_m=0.0265  perc=0.8003  sat=0.0390  cm=0.0093  border=0.0247  ecoh=0.0693  btv=0.0082  bd=0.0255  grad=20.102  lr=5.94e-04
+  [epoch  24 | step   60] loss=0.7009  l1_m=0.0220  perc=0.5888  sat=0.0311  cm=0.0060  border=0.0210  ecoh=0.0601  btv=0.0076  bd=0.0220  grad=7.801  lr=5.94e-04
+  [epoch  24 | step   70] loss=0.7169  l1_m=0.0228  perc=0.6036  sat=0.0258  cm=0.0047  border=0.0217  ecoh=0.0612  btv=0.0081  bd=0.0214  grad=3.038  lr=5.94e-04
+  [epoch  24 | step   80] loss=0.8171  l1_m=0.0263  perc=0.7170  sat=0.0403  cm=0.0063  border=0.0248  ecoh=0.0662  btv=0.0084  bd=0.0240  grad=9.488  lr=5.94e-04
+  [epoch  24 | step   90] loss=0.7144  l1_m=0.0225  perc=0.5942  sat=0.0272  cm=0.0051  border=0.0213  ecoh=0.0643  btv=0.0072  bd=0.0199  grad=5.882  lr=5.94e-04
+  [epoch  24 | step  100] loss=0.6231  l1_m=0.0184  perc=0.5530  sat=0.0241  cm=0.0038  border=0.0175  ecoh=0.0624  btv=0.0071  bd=0.0220  grad=8.561  lr=5.94e-04
+  [epoch  24 | step  110] loss=0.8527  l1_m=0.0272  perc=0.8144  sat=0.0402  cm=0.0094  border=0.0257  ecoh=0.0665  btv=0.0088  bd=0.0253  grad=16.130  lr=5.94e-04
+  [epoch  24 | step  120] loss=0.7733  l1_m=0.0235  perc=0.7031  sat=0.0316  cm=0.0058  border=0.0224  ecoh=0.0721  btv=0.0078  bd=0.0230  grad=4.279  lr=5.94e-04
+  val psnr=38.68 dB  psnr_masked=36.99 dB  [EMA]
+Epoch  24/50  loss=0.7637  psnr=36.99 dB * best  (246s)
+  [epoch  25 | step   10] loss=1.0843  l1_m=0.0338  perc=1.1149  sat=0.0466  cm=0.0128  border=0.0317  ecoh=0.0899  btv=0.0098  bd=0.0319  grad=7.418  lr=5.63e-04
+  [epoch  25 | step   20] loss=0.6345  l1_m=0.0195  perc=0.4903  sat=0.0269  cm=0.0030  border=0.0187  ecoh=0.0603  btv=0.0072  bd=0.0205  grad=4.556  lr=5.63e-04
+  [epoch  25 | step   30] loss=0.7072  l1_m=0.0218  perc=0.6914  sat=0.0347  cm=0.0044  border=0.0209  ecoh=0.0603  btv=0.0069  bd=0.0213  grad=10.016  lr=5.63e-04
+  [epoch  25 | step   40] loss=0.5682  l1_m=0.0173  perc=0.4249  sat=0.0225  cm=0.0035  border=0.0167  ecoh=0.0544  btv=0.0068  bd=0.0198  grad=4.664  lr=5.63e-04
+  [epoch  25 | step   50] loss=0.7561  l1_m=0.0237  perc=0.6454  sat=0.0273  cm=0.0048  border=0.0229  ecoh=0.0665  btv=0.0071  bd=0.0200  grad=9.349  lr=5.63e-04
+  [epoch  25 | step   60] loss=0.7793  l1_m=0.0239  perc=0.7388  sat=0.0283  cm=0.0065  border=0.0227  ecoh=0.0715  btv=0.0067  bd=0.0209  grad=13.916  lr=5.63e-04
+  [epoch  25 | step   70] loss=0.6847  l1_m=0.0209  perc=0.6406  sat=0.0288  cm=0.0050  border=0.0200  ecoh=0.0631  btv=0.0061  bd=0.0185  grad=6.581  lr=5.63e-04
+  [epoch  25 | step   80] loss=0.7749  l1_m=0.0243  perc=0.7428  sat=0.0351  cm=0.0048  border=0.0231  ecoh=0.0654  btv=0.0077  bd=0.0227  grad=5.583  lr=5.63e-04
+  [epoch  25 | step   90] loss=0.8130  l1_m=0.0249  perc=0.7785  sat=0.0377  cm=0.0053  border=0.0236  ecoh=0.0739  btv=0.0076  bd=0.0243  grad=8.555  lr=5.63e-04
+  [epoch  25 | step  100] loss=0.7819  l1_m=0.0249  perc=0.7053  sat=0.0389  cm=0.0070  border=0.0234  ecoh=0.0640  btv=0.0083  bd=0.0248  grad=15.031  lr=5.63e-04
+  [epoch  25 | step  110] loss=0.6950  l1_m=0.0219  perc=0.6896  sat=0.0317  cm=0.0050  border=0.0207  ecoh=0.0563  btv=0.0074  bd=0.0226  grad=11.127  lr=5.63e-04
+  [epoch  25 | step  120] loss=0.6472  l1_m=0.0198  perc=0.5578  sat=0.0273  cm=0.0049  border=0.0191  ecoh=0.0592  btv=0.0068  bd=0.0188  grad=11.886  lr=5.63e-04
+  val psnr=38.71 dB  psnr_masked=37.04 dB  [EMA]
+Epoch  25/50  loss=0.7591  psnr=37.04 dB * best  (245s)
+  [epoch  26 | step   10] loss=0.7275  l1_m=0.0227  perc=0.6760  sat=0.0289  cm=0.0064  border=0.0216  ecoh=0.0640  btv=0.0065  bd=0.0186  grad=14.420  lr=5.32e-04
+  [epoch  26 | step   20] loss=0.5993  l1_m=0.0184  perc=0.5029  sat=0.0254  cm=0.0047  border=0.0173  ecoh=0.0549  btv=0.0071  bd=0.0232  grad=7.095  lr=5.32e-04
+  [epoch  26 | step   30] loss=0.8127  l1_m=0.0256  perc=0.7203  sat=0.0318  cm=0.0085  border=0.0242  ecoh=0.0702  btv=0.0078  bd=0.0223  grad=18.202  lr=5.32e-04
+  [epoch  26 | step   40] loss=0.7291  l1_m=0.0227  perc=0.6856  sat=0.0315  cm=0.0090  border=0.0209  ecoh=0.0624  btv=0.0082  bd=0.0279  grad=23.395  lr=5.32e-04
+  [epoch  26 | step   50] loss=0.7710  l1_m=0.0238  perc=0.7209  sat=0.0336  cm=0.0045  border=0.0226  ecoh=0.0676  btv=0.0082  bd=0.0262  grad=11.092  lr=5.32e-04
+  [epoch  26 | step   60] loss=0.8176  l1_m=0.0255  perc=0.7573  sat=0.0317  cm=0.0051  border=0.0249  ecoh=0.0687  btv=0.0082  bd=0.0217  grad=4.329  lr=5.32e-04
+  [epoch  26 | step   70] loss=0.8140  l1_m=0.0260  perc=0.6890  sat=0.0391  cm=0.0075  border=0.0243  ecoh=0.0691  btv=0.0092  bd=0.0244  grad=7.942  lr=5.32e-04
+  [epoch  26 | step   80] loss=0.6927  l1_m=0.0215  perc=0.6778  sat=0.0320  cm=0.0043  border=0.0206  ecoh=0.0592  btv=0.0064  bd=0.0193  grad=8.989  lr=5.32e-04
+  [epoch  26 | step   90] loss=0.7897  l1_m=0.0240  perc=0.7924  sat=0.0343  cm=0.0039  border=0.0231  ecoh=0.0690  btv=0.0085  bd=0.0269  grad=9.421  lr=5.32e-04
+  [epoch  26 | step  100] loss=0.8030  l1_m=0.0252  perc=0.7792  sat=0.0323  cm=0.0053  border=0.0237  ecoh=0.0692  btv=0.0084  bd=0.0232  grad=8.595  lr=5.32e-04
+  [epoch  26 | step  110] loss=0.8470  l1_m=0.0268  perc=0.8659  sat=0.0381  cm=0.0076  border=0.0253  ecoh=0.0665  btv=0.0093  bd=0.0252  grad=6.000  lr=5.32e-04
+  [epoch  26 | step  120] loss=0.6547  l1_m=0.0206  perc=0.5476  sat=0.0320  cm=0.0059  border=0.0196  ecoh=0.0545  btv=0.0073  bd=0.0227  grad=13.524  lr=5.32e-04
+  val psnr=38.74 dB  psnr_masked=37.08 dB  [EMA]
+Epoch  26/50  loss=0.7552  psnr=37.08 dB * best  (245s)
+  [epoch  27 | step   10] loss=0.7357  l1_m=0.0224  perc=0.6236  sat=0.0288  cm=0.0046  border=0.0214  ecoh=0.0711  btv=0.0070  bd=0.0202  grad=11.757  lr=5.00e-04
+  [epoch  27 | step   20] loss=0.7355  l1_m=0.0228  perc=0.6742  sat=0.0338  cm=0.0062  border=0.0214  ecoh=0.0640  btv=0.0085  bd=0.0268  grad=14.677  lr=5.00e-04
+  [epoch  27 | step   30] loss=0.7756  l1_m=0.0247  perc=0.6586  sat=0.0377  cm=0.0067  border=0.0231  ecoh=0.0664  btv=0.0083  bd=0.0236  grad=8.983  lr=5.00e-04
+  [epoch  27 | step   40] loss=0.7520  l1_m=0.0239  perc=0.6320  sat=0.0381  cm=0.0046  border=0.0228  ecoh=0.0612  btv=0.0097  bd=0.0258  grad=14.036  lr=5.00e-04
+  [epoch  27 | step   50] loss=0.7029  l1_m=0.0210  perc=0.6568  sat=0.0311  cm=0.0049  border=0.0199  ecoh=0.0655  btv=0.0078  bd=0.0274  grad=9.578  lr=5.00e-04
+  [epoch  27 | step   60] loss=0.6390  l1_m=0.0202  perc=0.4878  sat=0.0268  cm=0.0063  border=0.0191  ecoh=0.0552  btv=0.0080  bd=0.0235  grad=8.591  lr=5.00e-04
+  [epoch  27 | step   70] loss=0.6423  l1_m=0.0195  perc=0.6015  sat=0.0254  cm=0.0045  border=0.0188  ecoh=0.0576  btv=0.0066  bd=0.0202  grad=8.949  lr=5.00e-04
+  [epoch  27 | step   80] loss=0.6908  l1_m=0.0210  perc=0.6536  sat=0.0288  cm=0.0044  border=0.0202  ecoh=0.0628  btv=0.0072  bd=0.0196  grad=5.437  lr=5.00e-04
+  [epoch  27 | step   90] loss=0.7252  l1_m=0.0223  perc=0.5748  sat=0.0265  cm=0.0033  border=0.0219  ecoh=0.0669  btv=0.0081  bd=0.0203  grad=4.122  lr=5.00e-04
+  [epoch  27 | step  100] loss=0.7913  l1_m=0.0244  perc=0.7460  sat=0.0294  cm=0.0044  border=0.0235  ecoh=0.0708  btv=0.0078  bd=0.0215  grad=14.795  lr=5.00e-04
+  [epoch  27 | step  110] loss=0.8955  l1_m=0.0276  perc=0.8866  sat=0.0368  cm=0.0074  border=0.0262  ecoh=0.0792  btv=0.0081  bd=0.0244  grad=13.853  lr=5.00e-04
+  [epoch  27 | step  120] loss=0.6513  l1_m=0.0202  perc=0.5324  sat=0.0265  cm=0.0045  border=0.0194  ecoh=0.0583  btv=0.0075  bd=0.0205  grad=9.095  lr=5.00e-04
+  val psnr=38.77 dB  psnr_masked=37.11 dB  [EMA]
+Epoch  27/50  loss=0.7516  psnr=37.11 dB * best  (245s)
+  [epoch  28 | step   10] loss=0.9043  l1_m=0.0270  perc=1.0061  sat=0.0399  cm=0.0051  border=0.0262  ecoh=0.0797  btv=0.0076  bd=0.0249  grad=6.367  lr=4.69e-04
+  [epoch  28 | step   20] loss=0.7185  l1_m=0.0226  perc=0.6096  sat=0.0303  cm=0.0044  border=0.0218  ecoh=0.0602  btv=0.0086  bd=0.0234  grad=3.546  lr=4.69e-04
+  [epoch  28 | step   30] loss=0.7443  l1_m=0.0229  perc=0.7156  sat=0.0287  cm=0.0055  border=0.0218  ecoh=0.0660  btv=0.0072  bd=0.0230  grad=6.082  lr=4.69e-04
+  [epoch  28 | step   40] loss=0.6438  l1_m=0.0197  perc=0.5921  sat=0.0249  cm=0.0046  border=0.0190  ecoh=0.0568  btv=0.0070  bd=0.0211  grad=8.479  lr=4.69e-04
+  [epoch  28 | step   50] loss=0.7530  l1_m=0.0232  perc=0.6737  sat=0.0366  cm=0.0047  border=0.0219  ecoh=0.0688  btv=0.0069  bd=0.0237  grad=15.213  lr=4.69e-04
+  [epoch  28 | step   60] loss=0.6988  l1_m=0.0221  perc=0.5494  sat=0.0275  cm=0.0046  border=0.0212  ecoh=0.0604  btv=0.0082  bd=0.0225  grad=9.595  lr=4.69e-04
+  [epoch  28 | step   70] loss=0.7019  l1_m=0.0210  perc=0.6336  sat=0.0262  cm=0.0041  border=0.0204  ecoh=0.0666  btv=0.0072  bd=0.0214  grad=6.393  lr=4.69e-04
+  [epoch  28 | step   80] loss=0.7729  l1_m=0.0238  perc=0.8228  sat=0.0365  cm=0.0069  border=0.0225  ecoh=0.0634  btv=0.0083  bd=0.0264  grad=10.490  lr=4.69e-04
+  [epoch  28 | step   90] loss=0.7559  l1_m=0.0233  perc=0.6811  sat=0.0319  cm=0.0058  border=0.0219  ecoh=0.0674  btv=0.0087  bd=0.0276  grad=7.474  lr=4.69e-04
+  [epoch  28 | step  100] loss=0.6271  l1_m=0.0201  perc=0.4889  sat=0.0232  cm=0.0056  border=0.0191  ecoh=0.0522  btv=0.0075  bd=0.0210  grad=10.093  lr=4.69e-04
+  [epoch  28 | step  110] loss=0.8293  l1_m=0.0265  perc=0.7853  sat=0.0374  cm=0.0062  border=0.0253  ecoh=0.0648  btv=0.0086  bd=0.0256  grad=10.532  lr=4.69e-04
+  [epoch  28 | step  120] loss=0.7706  l1_m=0.0234  perc=0.7464  sat=0.0357  cm=0.0094  border=0.0223  ecoh=0.0668  btv=0.0073  bd=0.0249  grad=13.852  lr=4.69e-04
+  val psnr=38.79 dB  psnr_masked=37.14 dB  [EMA]
+Epoch  28/50  loss=0.7507  psnr=37.14 dB * best  (243s)
+  [epoch  29 | step   10] loss=0.7885  l1_m=0.0247  perc=0.6651  sat=0.0347  cm=0.0062  border=0.0237  ecoh=0.0679  btv=0.0083  bd=0.0232  grad=19.007  lr=4.38e-04
+  [epoch  29 | step   20] loss=0.8351  l1_m=0.0267  perc=0.7600  sat=0.0370  cm=0.0079  border=0.0251  ecoh=0.0689  btv=0.0083  bd=0.0236  grad=16.338  lr=4.38e-04
+  [epoch  29 | step   30] loss=0.8872  l1_m=0.0276  perc=0.9221  sat=0.0424  cm=0.0093  border=0.0266  ecoh=0.0691  btv=0.0084  bd=0.0267  grad=10.751  lr=4.38e-04
+  [epoch  29 | step   40] loss=0.6714  l1_m=0.0210  perc=0.5265  sat=0.0263  cm=0.0071  border=0.0200  ecoh=0.0588  btv=0.0079  bd=0.0228  grad=12.018  lr=4.38e-04
+  [epoch  29 | step   50] loss=0.8302  l1_m=0.0251  perc=0.8903  sat=0.0353  cm=0.0056  border=0.0241  ecoh=0.0734  btv=0.0074  bd=0.0225  grad=6.325  lr=4.38e-04
+  [epoch  29 | step   60] loss=0.7533  l1_m=0.0238  perc=0.6970  sat=0.0357  cm=0.0068  border=0.0225  ecoh=0.0614  btv=0.0081  bd=0.0249  grad=13.753  lr=4.38e-04
+  [epoch  29 | step   70] loss=0.7759  l1_m=0.0228  perc=0.7706  sat=0.0272  cm=0.0058  border=0.0219  ecoh=0.0771  btv=0.0066  bd=0.0208  grad=10.805  lr=4.38e-04
+  [epoch  29 | step   80] loss=0.8076  l1_m=0.0256  perc=0.7049  sat=0.0351  cm=0.0070  border=0.0243  ecoh=0.0668  btv=0.0086  bd=0.0260  grad=4.682  lr=4.38e-04
+  [epoch  29 | step   90] loss=0.6874  l1_m=0.0218  perc=0.5916  sat=0.0303  cm=0.0051  border=0.0208  ecoh=0.0557  btv=0.0083  bd=0.0238  grad=6.080  lr=4.38e-04
+  [epoch  29 | step  100] loss=0.8123  l1_m=0.0258  perc=0.8198  sat=0.0353  cm=0.0069  border=0.0245  ecoh=0.0647  btv=0.0077  bd=0.0211  grad=15.103  lr=4.38e-04
+  [epoch  29 | step  110] loss=0.6988  l1_m=0.0210  perc=0.6670  sat=0.0288  cm=0.0054  border=0.0203  ecoh=0.0630  btv=0.0077  bd=0.0224  grad=3.187  lr=4.38e-04
+  [epoch  29 | step  120] loss=0.6199  l1_m=0.0186  perc=0.5645  sat=0.0262  cm=0.0029  border=0.0180  ecoh=0.0579  btv=0.0066  bd=0.0203  grad=13.319  lr=4.38e-04
+  val psnr=38.81 dB  psnr_masked=37.17 dB  [EMA]
+Epoch  29/50  loss=0.7535  psnr=37.17 dB * best  (243s)
+  [epoch  30 | step   10] loss=0.8873  l1_m=0.0268  perc=0.8254  sat=0.0368  cm=0.0052  border=0.0257  ecoh=0.0840  btv=0.0083  bd=0.0249  grad=17.844  lr=4.07e-04
+  [epoch  30 | step   20] loss=0.6482  l1_m=0.0201  perc=0.5651  sat=0.0243  cm=0.0037  border=0.0197  ecoh=0.0563  btv=0.0067  bd=0.0183  grad=12.490  lr=4.07e-04
+  [epoch  30 | step   30] loss=0.7009  l1_m=0.0215  perc=0.6335  sat=0.0294  cm=0.0042  border=0.0207  ecoh=0.0627  btv=0.0077  bd=0.0219  grad=2.717  lr=4.07e-04
+  [epoch  30 | step   40] loss=0.7475  l1_m=0.0228  perc=0.6643  sat=0.0293  cm=0.0048  border=0.0221  ecoh=0.0665  btv=0.0082  bd=0.0261  grad=17.292  lr=4.07e-04
+  [epoch  30 | step   50] loss=0.6577  l1_m=0.0208  perc=0.5688  sat=0.0253  cm=0.0031  border=0.0196  ecoh=0.0580  btv=0.0073  bd=0.0213  grad=4.179  lr=4.07e-04
+  [epoch  30 | step   60] loss=0.6317  l1_m=0.0196  perc=0.5863  sat=0.0242  cm=0.0045  border=0.0187  ecoh=0.0548  btv=0.0069  bd=0.0205  grad=14.130  lr=4.07e-04
+  [epoch  30 | step   70] loss=0.9515  l1_m=0.0302  perc=0.8823  sat=0.0424  cm=0.0052  border=0.0288  ecoh=0.0784  btv=0.0106  bd=0.0276  grad=1.718  lr=4.07e-04
+  [epoch  30 | step   80] loss=0.7082  l1_m=0.0223  perc=0.5773  sat=0.0315  cm=0.0054  border=0.0216  ecoh=0.0585  btv=0.0087  bd=0.0237  grad=12.647  lr=4.07e-04
+  [epoch  30 | step   90] loss=0.8418  l1_m=0.0261  perc=0.8067  sat=0.0392  cm=0.0058  border=0.0246  ecoh=0.0730  btv=0.0096  bd=0.0279  grad=5.266  lr=4.07e-04
+  [epoch  30 | step  100] loss=0.8244  l1_m=0.0254  perc=0.8196  sat=0.0415  cm=0.0041  border=0.0241  ecoh=0.0697  btv=0.0097  bd=0.0305  grad=3.182  lr=4.07e-04
+  [epoch  30 | step  110] loss=0.8689  l1_m=0.0263  perc=0.8059  sat=0.0316  cm=0.0053  border=0.0254  ecoh=0.0822  btv=0.0081  bd=0.0223  grad=24.504  lr=4.07e-04
+  [epoch  30 | step  120] loss=0.7383  l1_m=0.0232  perc=0.6970  sat=0.0264  cm=0.0074  border=0.0218  ecoh=0.0633  btv=0.0075  bd=0.0213  grad=10.239  lr=4.07e-04
+  val psnr=38.83 dB  psnr_masked=37.20 dB  [EMA]
+Epoch  30/50  loss=0.7430  psnr=37.20 dB * best  (243s)
+  [epoch  31 | step   10] loss=0.6746  l1_m=0.0209  perc=0.6398  sat=0.0282  cm=0.0059  border=0.0199  ecoh=0.0575  btv=0.0073  bd=0.0216  grad=15.124  lr=3.76e-04
+  [epoch  31 | step   20] loss=0.6798  l1_m=0.0217  perc=0.5453  sat=0.0299  cm=0.0064  border=0.0205  ecoh=0.0569  btv=0.0076  bd=0.0223  grad=16.717  lr=3.76e-04
+  [epoch  31 | step   30] loss=0.6932  l1_m=0.0218  perc=0.6507  sat=0.0291  cm=0.0042  border=0.0205  ecoh=0.0596  btv=0.0074  bd=0.0220  grad=7.154  lr=3.76e-04
+  [epoch  31 | step   40] loss=0.6746  l1_m=0.0205  perc=0.5827  sat=0.0259  cm=0.0040  border=0.0196  ecoh=0.0641  btv=0.0071  bd=0.0213  grad=8.152  lr=3.76e-04
+  [epoch  31 | step   50] loss=0.6820  l1_m=0.0214  perc=0.4967  sat=0.0313  cm=0.0052  border=0.0204  ecoh=0.0605  btv=0.0082  bd=0.0242  grad=7.823  lr=3.76e-04
+  [epoch  31 | step   60] loss=0.8377  l1_m=0.0262  perc=0.8090  sat=0.0410  cm=0.0063  border=0.0251  ecoh=0.0668  btv=0.0101  bd=0.0286  grad=7.114  lr=3.76e-04
+  [epoch  31 | step   70] loss=0.7399  l1_m=0.0228  perc=0.6674  sat=0.0273  cm=0.0077  border=0.0215  ecoh=0.0661  btv=0.0080  bd=0.0252  grad=27.822  lr=3.76e-04
+  [epoch  31 | step   80] loss=0.7065  l1_m=0.0214  perc=0.6608  sat=0.0260  cm=0.0038  border=0.0208  ecoh=0.0635  btv=0.0078  bd=0.0230  grad=4.668  lr=3.76e-04
+  [epoch  31 | step   90] loss=0.7317  l1_m=0.0228  perc=0.6574  sat=0.0277  cm=0.0056  border=0.0218  ecoh=0.0651  btv=0.0072  bd=0.0193  grad=6.058  lr=3.76e-04
+  [epoch  31 | step  100] loss=0.7423  l1_m=0.0234  perc=0.6281  sat=0.0303  cm=0.0049  border=0.0225  ecoh=0.0629  btv=0.0088  bd=0.0234  grad=8.898  lr=3.76e-04
+  [epoch  31 | step  110] loss=0.6793  l1_m=0.0207  perc=0.6274  sat=0.0277  cm=0.0042  border=0.0199  ecoh=0.0612  btv=0.0081  bd=0.0219  grad=9.422  lr=3.76e-04
+  [epoch  31 | step  120] loss=0.7682  l1_m=0.0233  perc=0.7682  sat=0.0288  cm=0.0048  border=0.0227  ecoh=0.0682  btv=0.0072  bd=0.0207  grad=11.439  lr=3.76e-04
+  val psnr=38.85 dB  psnr_masked=37.22 dB  [EMA]
+Epoch  31/50  loss=0.7463  psnr=37.22 dB * best  (243s)
+  [epoch  32 | step   10] loss=0.8029  l1_m=0.0248  perc=0.7545  sat=0.0304  cm=0.0076  border=0.0237  ecoh=0.0697  btv=0.0081  bd=0.0230  grad=15.932  lr=3.46e-04
+  [epoch  32 | step   20] loss=0.8057  l1_m=0.0244  perc=0.7565  sat=0.0359  cm=0.0036  border=0.0236  ecoh=0.0724  btv=0.0089  bd=0.0273  grad=10.674  lr=3.46e-04
+  [epoch  32 | step   30] loss=0.8456  l1_m=0.0269  perc=0.7338  sat=0.0330  cm=0.0048  border=0.0257  ecoh=0.0730  btv=0.0082  bd=0.0203  grad=7.711  lr=3.46e-04
+  [epoch  32 | step   40] loss=0.7798  l1_m=0.0244  perc=0.6930  sat=0.0296  cm=0.0067  border=0.0233  ecoh=0.0680  btv=0.0073  bd=0.0211  grad=3.742  lr=3.46e-04
+  [epoch  32 | step   50] loss=0.7622  l1_m=0.0245  perc=0.6992  sat=0.0313  cm=0.0054  border=0.0232  ecoh=0.0613  btv=0.0078  bd=0.0226  grad=12.290  lr=3.46e-04
+  [epoch  32 | step   60] loss=0.8081  l1_m=0.0255  perc=0.6794  sat=0.0352  cm=0.0065  border=0.0243  ecoh=0.0698  btv=0.0083  bd=0.0231  grad=5.836  lr=3.46e-04
+  [epoch  32 | step   70] loss=0.6977  l1_m=0.0211  perc=0.6411  sat=0.0235  cm=0.0076  border=0.0201  ecoh=0.0654  btv=0.0064  bd=0.0200  grad=18.624  lr=3.46e-04
+  [epoch  32 | step   80] loss=0.6566  l1_m=0.0203  perc=0.5839  sat=0.0268  cm=0.0065  border=0.0193  ecoh=0.0570  btv=0.0072  bd=0.0221  grad=16.711  lr=3.46e-04
+  [epoch  32 | step   90] loss=0.7582  l1_m=0.0242  perc=0.6421  sat=0.0340  cm=0.0083  border=0.0228  ecoh=0.0620  btv=0.0085  bd=0.0242  grad=16.557  lr=3.46e-04

@@ -3,35 +3,39 @@ infer_seg.py  –  predict a watermark mask from a watermarked image
 -------------------------------------------------------------------
 Usage:
   python infer_seg.py \\
-      --checkpoint checkpoints_seg/best.pth \\
+      --checkpoint artifacts/checkpoints/segmentation/best.pth \\
       --watermarked path/to/watermarked.jpg \\
       --output      mask.png \\
       [--config configs/seg.yaml]
 
   # Debug mode: show N random dataset samples in a matplotlib window
   python infer_seg.py \\
-      --checkpoint checkpoints_seg/best.pth \\
+      --checkpoint artifacts/checkpoints/segmentation/best.pth \\
       --debug [--n-samples 12] \\
       [--config configs/seg.yaml]
 """
 
 import argparse
 import random
+import sys
 from pathlib import Path
 
 import cv2
 import numpy as np
-import yaml
 import torch
 
+REPO_ROOT = Path(__file__).resolve().parent.parent
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
 from infer import load_seg_model, predict_mask
+from wm_shared.config import load_yaml_config
 
 _HERE = Path(__file__).parent
 
 
 def load_cfg(path: str) -> dict:
-    with open(path) as f:
-        return yaml.safe_load(f)
+    return load_yaml_config(path)
 
 
 def _debug_grid(model, cfg, device, n_samples: int):

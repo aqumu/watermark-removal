@@ -39,9 +39,9 @@ esac
 
 echo
 echo "Installing dependencies..."
-pip install -r pipeline/requirements.txt
+pip install -r data_gen/requirements.txt
 pip install -r training/requirements.txt
-pip install -e pipeline/
+pip install -e data_gen/
 
 echo
 echo "=== Setup complete ==="
@@ -56,13 +56,13 @@ echo
 echo "First-time workflow on a new machine:"
 echo
 echo "  1) Generate the dataset:"
-echo "       wm-generate --config pipeline/configs/default.yaml"
+echo "       wm-generate --config data_gen/configs/default.yaml"
 echo
 echo "  2) Train the model:"
 echo "       cd training"
 echo "       python train.py"
 echo
 echo "  3) Run inference:"
-echo "       python infer.py --checkpoint checkpoints/best.pth \\"
+echo "       python infer.py --checkpoint artifacts/checkpoints/removal/best.pth \\"
 echo "           --watermarked IMAGE --mask MASK --output result.png"
 echo

@@ -1,0 +1,11 @@
+name: default
+watermark_asset: data_gen/watermark.png
+
+placement:
+  width_fraction: [0.76, 0.82]
+  center_jitter: true
+
+removal_crop:
+  aspect_ratio: 3.54
+  margin_ratio: 0.12
+  min_width_ratio: 0.50

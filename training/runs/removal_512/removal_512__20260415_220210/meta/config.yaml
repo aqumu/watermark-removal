@@ -1,0 +1,81 @@
+watermark_profile: C:\Users\aqumu\PycharmProjects\watermark-removal\configs\profiles\default.yaml
+dataset:
+  root: C:\Users\aqumu\PycharmProjects\watermark-removal\data_gen\dataset
+  preprocessed_store_dir: C:\Users\aqumu\PycharmProjects\watermark-removal\data_gen\preprocessed_store
+  image_width: 512
+  image_height: 256
+  train_split: 0.9
+  num_workers: 2
+  prefetch_factor: 2
+  max_samples: 15000
+  crop_aspect_ratio: 3.54
+  crop_margin_ratio: 0.12
+  crop_min_width_ratio: 0.5
+model:
+  type: scratch
+  base_channels: 32
+  depth: 4
+  use_checkpoint: true
+training:
+  epochs: 50
+  batch_size: 16
+  grad_accum_steps: 4
+  lr: 0.001
+  lr_scheduler: cosine_warmup
+  weight_decay: 2.0e-05
+  grad_clip: 100
+  amp: true
+  val_every: 1
+  ema_decay: 0.995
+torch_threads: 4
+loss:
+  l1_masked: 5
+  border: 16
+  bg_tv: 0.7
+  bg_delta: 1
+  color_moment: 1.5
+  perceptual: 0.1
+  perceptual_every: 1
+  saturation: 0.3
+  edge_coherence: 2.5
+  loss_mask_blur_pct: 4
+  erosion_kernel: 3
+checkpointing:
+  save_every: 1
+  keep_last: 5
+  resume_from: C:\Users\aqumu\PycharmProjects\watermark-removal\training\runs\removal_512\removal_512__20260415_220210\artifacts\checkpoints\epoch_0009.pth
+  dir: C:\Users\aqumu\PycharmProjects\watermark-removal\training\runs\removal_512\removal_512__20260415_220210\artifacts\checkpoints
+logging:
+  log_every: 10
+  keep_latest_runs: 15
+  dir: C:\Users\aqumu\PycharmProjects\watermark-removal\training\runs\removal_512\removal_512__20260415_220210
+  project_run: removal_512
+  family_dir: C:\Users\aqumu\PycharmProjects\watermark-removal\training\runs\removal_512
+  run_id: removal_512__20260415_220210
+  timeline_id: removal_512__20260415_220210
+  config_path: C:\Users\aqumu\PycharmProjects\watermark-removal\training\configs\dashboard\.generated\removal_512__20260416_034241.yaml
+dashboard:
+  enabled: false
+  host: 0.0.0.0
+  port: 8765
+  open_browser: false
+  task_type: removal
+device: cuda
+template_id: train_256
+family_name: removal_512
+task_type: removal
+watermark_profile_resolved: C:\Users\aqumu\PycharmProjects\watermark-removal\configs\profiles\default.yaml
+watermark_profile_data:
+  name: default
+  watermark_asset: data_gen/watermark.png
+  aspect_ratio: 3.54
+  placement:
+    width_fraction:
+    - 0.76
+    - 0.82
+    center_jitter: true
+  removal_crop:
+    aspect_ratio: 3.54
+    margin_ratio: 0.12
+    min_width_ratio: 0.5
+seed: 42

@@ -1,0 +1,12 @@
+# Normalize line endings: store LF in the repo, check out as-is on all platforms
+* text=auto eol=lf
+
+# Windows batch files must stay CRLF
+*.bat text eol=crlf
+
+# Binaries — no line ending conversion
+*.pth binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.pth.json -text

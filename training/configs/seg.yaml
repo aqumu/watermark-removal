@@ -1,5 +1,7 @@
+watermark_profile: ../../configs/profiles/default.yaml
+
 dataset:
-  root: "../pipeline/dataset" # same dataset used for removal training
+  root: "../data_gen/dataset" # same dataset used for removal training
   image_size: 256 # 128 produced pixel-art masks; 256 gives full detail
   train_split: 0.9
   num_workers: 2
@@ -23,6 +25,7 @@ training:
     l1: 0.1
     ms: 0.25         # pretrained model won't hollow-predict; less critical
     dice: 0.5        # still useful for overlap, but no longer needs to carry everything
+  grad_accum_steps: 1
   grad_clip: 2.0     # pretrained encoder produces smaller, more stable gradients
   val_every: 1
   amp: true # bfloat16 mixed precision (activates only on CUDA)
@@ -30,12 +33,12 @@ training:
 torch_threads: 0
 
 checkpointing:
-  dir: "./checkpoints_seg"
+  dir: "./artifacts/checkpoints/segmentation"
   save_every: 5
   keep_last: 3
 
 logging:
-  dir: "./runs_seg"
+  dir: "./runs/segmentation"
   log_every: 20
   preview_every: 40 # update visualisation every N global steps (0 = epoch-end only)
 

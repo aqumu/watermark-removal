@@ -1,0 +1,56 @@
+watermark_profile: ../../configs/profiles/default.yaml
+
+dataset:
+  root: "../data_gen/dataset"
+  preprocessed_store_dir: "../data_gen/preprocessed_store"
+  image_width: 512
+  image_height: 256
+  train_split: 0.9
+  num_workers: 2
+  prefetch_factor: 2
+  max_samples: 15000
+
+model:
+  type: scratch
+  base_channels: 32
+  depth: 4
+  use_checkpoint: true
+
+training:
+  epochs: 50
+  batch_size: 16
+  grad_accum_steps: 4
+  lr: 5.0e-3
+  lr_scheduler: cosine_warmup
+  weight_decay: 1.0e-4
+  grad_clip: 100.0
+  amp: true
+  val_every: 1
+  ema_decay: 0.99
+
+torch_threads: 4
+
+loss:
+  l1_masked: 5.0
+  border: 8.0
+  bg_tv: 0.3
+  bg_delta: 1.0
+  color_moment: 1.5
+  perceptual: 0.1
+  perceptual_every: 1
+  saturation: 0.3
+  edge_coherence: 0.7
+  loss_mask_blur_pct: 4.0
+  erosion_kernel: 3
+
+checkpointing:
+  dir: "./artifacts/checkpoints/restoration_512"
+  save_every: 1
+  keep_last: 5
+
+logging:
+  dir: "./runs/restoration_512"
+  log_every: 10
+
+seed: 42
+device: cuda

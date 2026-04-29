@@ -8,30 +8,33 @@ __pycache__/
 venv/
 env/
 
-# Pipeline — generated data (large, re-run pipeline to regenerate)
-pipeline/clean_images/
-pipeline/dataset/
-pipeline/data/failed_urls.txt
-pipeline/*.egg-info/
+# Data generation — generated data (large, re-run pipeline to regenerate)
+data_gen/clean_images/
+data_gen/dataset/
+data_gen/data/failed_urls.txt
+data_gen/*.egg-info/
 
-# Training artifacts
-training/checkpoints/*.pth
-training/checkpoints_256/*.pth
-training/checkpoints_seg/*.pth
-training/runs/*.csv
-training/runs/*.json
-training/runs/*.png
-training/runs_seg/*.csv
-training/runs_seg/*.json
-training/runs_seg/*.png
-training/runs_256/*.csv
-training/runs_256/*.json
-training/runs_256/*.png
+# Training runs — ignore everything except the canonical example run
+training/runs/removal_256/
+training/runs/segmentation/
+training/runs/removal_512/*/
+!training/runs/removal_512/removal_512__20260415_220210/
+# Never commit checkpoint weights, even inside the example run
+training/runs/removal_512/removal_512__20260415_220210/artifacts/checkpoints/*.pth
+
+# Preprocessed stores — always regenerated locally, never committed
+data_gen/preprocessed_store/
+
+# Auto-generated dashboard configs (written at run-start, never hand-edited)
+training/configs/dashboard/.generated/
 
 # Inference outputs
 training/result*.png
 training/result*.jpg
 training/output/
+
+# Frontend
+node_modules/
 
 # IDE
 .idea/

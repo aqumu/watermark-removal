@@ -1,0 +1,31 @@
+{
+  "identity": {
+    "project_run": "removal_512",
+    "run_id": "removal_512__20260415_220210",
+    "timeline_id": "removal_512__20260415_220210",
+    "task_name": "removal",
+    "created_at": "2026-04-15T15:02:10+00:00",
+    "status": "paused",
+    "config_fingerprint": "5abcaba81a469c97",
+    "code_fingerprint": "25ccfcee9e92d602b50ff47e7f68864382714a7a",
+    "device": "cuda",
+    "lineage": {
+      "start_mode": "resume",
+      "history_mode": "fork",
+      "parent_run_id": null,
+      "parent_timeline_id": null,
+      "parent_checkpoint": "C:\\Users\\aqumu\\PycharmProjects\\watermark-removal\\training\\runs\\removal_512\\removal_512__20260415_220210\\artifacts\\checkpoints\\epoch_0009.pth",
+      "resumed_from_epoch": 9
+    }
+  },
+  "paths": {
+    "root_dir": "C:\\Users\\aqumu\\PycharmProjects\\watermark-removal\\training\\runs\\removal_512",
+    "run_dir": "C:\\Users\\aqumu\\PycharmProjects\\watermark-removal\\training\\runs\\removal_512\\removal_512__20260415_220210",
+    "meta_dir": "C:\\Users\\aqumu\\PycharmProjects\\watermark-removal\\training\\runs\\removal_512\\removal_512__20260415_220210\\meta",
+    "preview_dir": "C:\\Users\\aqumu\\PycharmProjects\\watermark-removal\\training\\runs\\removal_512\\removal_512__20260415_220210\\previews",
+    "artifact_dir": "C:\\Users\\aqumu\\PycharmProjects\\watermark-removal\\training\\runs\\removal_512\\removal_512__20260415_220210\\artifacts",
+    "tracker_dir": "C:\\Users\\aqumu\\PycharmProjects\\watermark-removal\\training\\runs\\removal_512\\removal_512__20260415_220210\\tracker",
+    "train_csv": "C:\\Users\\aqumu\\PycharmProjects\\watermark-removal\\training\\runs\\removal_512\\removal_512__20260415_220210\\train.csv",
+    "val_csv": "C:\\Users\\aqumu\\PycharmProjects\\watermark-removal\\training\\runs\\removal_512\\removal_512__20260415_220210\\val.csv"
+  }
+}

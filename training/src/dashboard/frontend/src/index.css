@@ -1,0 +1,109 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Core palette — deep navy */
+    --background: 222 22% 6%;
+    --foreground: 215 15% 91%;
+    --card: 222 20% 8%;
+    --card-foreground: 215 15% 91%;
+    --popover: 222 20% 9%;
+    --popover-foreground: 215 15% 91%;
+
+    /* Interactive */
+    --primary: 217 91% 60%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 222 16% 11%;
+    --secondary-foreground: 215 12% 80%;
+
+    /* Neutral */
+    --muted: 222 13% 14%;
+    --muted-foreground: 220 9% 48%;
+
+    /* Semantic accents */
+    --accent: 142 70% 45%;
+    --accent-foreground: 0 0% 100%;
+    --success: 142 70% 45%;
+    --success-foreground: 0 0% 100%;
+    --warning: 38 92% 50%;
+    --warning-foreground: 0 0% 100%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 98%;
+
+    /* Structure */
+    --border: 222 13% 18%;
+    --input: 222 13% 13%;
+    --ring: 217 91% 60%;
+    --radius: 0.45rem;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  html {
+    font-size: 15px;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-family: 'Instrument Sans', system-ui, sans-serif;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+
+  code,
+  pre,
+  .font-mono {
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+  }
+
+  ::-webkit-scrollbar {
+    width: 5px;
+    height: 5px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: hsl(var(--border));
+    border-radius: 9999px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: hsl(var(--muted-foreground) / 0.4);
+  }
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+
+  /* Semantic label: "SECTION TITLE" style */
+  .label-caps {
+    font-size: 0.65rem;
+    font-weight: 500;
+    letter-spacing: 0.17em;
+    text-transform: uppercase;
+    color: hsl(var(--muted-foreground));
+  }
+
+  /* Subtle fade-up for page transitions */
+  .animate-in-up {
+    animation: slide-up-fade 0.18s ease-out both;
+  }
+}
+
+@keyframes slide-up-fade {
+  from {
+    opacity: 0;
+    transform: translateY(5px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

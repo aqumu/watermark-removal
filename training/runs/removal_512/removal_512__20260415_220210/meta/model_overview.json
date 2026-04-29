@@ -1,0 +1,13 @@
+{
+  "model_name": "MaskedUNet",
+  "parameter_count": 8985827,
+  "optimizer": "AdamW",
+  "scheduler": "cosine_warmup",
+  "extra": {
+    "image_width": 512,
+    "image_height": 256,
+    "batch_size": 16,
+    "grad_accum_steps": 4,
+    "ema_decay": 0.995
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "exclude": [
+    "training/runs",
+    "training/alignment_vis",
+    "training/alignment_vis_predilation",
+    "data_gen/data",
+    "data_gen/clean_images",
+    "docs",
+    "**/__pycache__",
+    "**/.git"
+  ]
+}

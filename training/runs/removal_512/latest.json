@@ -1,0 +1,9 @@
+{
+  "project_run": "removal_512",
+  "run_id": "removal_512__20260419_210714",
+  "timeline_id": "removal_512__20260419_210714",
+  "status": "running",
+  "updated_at": "2026-04-19T14:07:14+00:00",
+  "run_dir": "C:\\Users\\aqumu\\PycharmProjects\\watermark-removal\\training\\runs\\removal_512\\removal_512__20260419_210714",
+  "run_manifest": "C:\\Users\\aqumu\\PycharmProjects\\watermark-removal\\training\\runs\\removal_512\\removal_512__20260419_210714\\meta\\run.json"
+}
