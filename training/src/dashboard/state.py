@@ -8,7 +8,7 @@ from collections import deque
 from pathlib import Path
 from typing import Any
 
-from wm_shared.run_manifest import RunIdentity, RunLineage, RunManifest, RunPaths, load_run_manifest
+from wm_shared.run_manifest import RunIdentity, RunLineage, RunManifest, RunPaths, build_run_paths, load_run_manifest
 
 
 MAX_POINTS = 500
@@ -153,7 +153,13 @@ def _legacy_manifest(run_dir: Path, payload: dict[str, Any]) -> RunManifest:
 def _load_any_manifest(run_json: Path) -> RunManifest:
     payload = json.loads(run_json.read_text(encoding="utf-8"))
     if isinstance(payload, dict) and "identity" in payload and "paths" in payload:
-        return load_run_manifest(run_json)
+        manifest = load_run_manifest(run_json)
+        # Paths in run.json are absolute and baked in at training time — they break
+        # on any machine other than the one that created the run.  Re-derive from
+        # the actual location of run.json on disk so cloned repos work correctly.
+        run_dir = run_json.parent.parent
+        manifest.paths = build_run_paths(run_dir.parent, run_dir.name)
+        return manifest
     if isinstance(payload, dict):
         return _legacy_manifest(run_json.parent.parent, payload)
     return _legacy_manifest(run_json.parent.parent, {})
