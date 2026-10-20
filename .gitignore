@@ -67,3 +67,8 @@ node_modules/
 # OS
 .DS_Store
 Thumbs.db
+
+# Background indexes with machine-specific paths (tools/cian_watermark/collect.py)
+data_gen/backgrounds/
+# Reverse-engineering scratch output (tools/cian_watermark)
+tools/cian_watermark/out/

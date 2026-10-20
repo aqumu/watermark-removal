@@ -1,0 +1,59 @@
+# Cian overlay removal — short, small-model run to check the whole pipeline.
+mark: cian
+
+data:
+  backgrounds:
+    # in-domain photos: Cian photos away from their own mark (bottom-right corner)
+    - {csv: data_gen/backgrounds/cian_index.csv, kind: mark}
+    # clean real-estate photos without any mark
+    - {dir: data_gen/clean_images, kind: clean}
+  holdout: 0.05            # fraction of listings / images kept for validation and previews
+  bg_scale:                # random downscale of a background, like a resized original
+    mark: [0.6, 1.0]
+    clean: [0.75, 1.0]
+  mark_deviation:          # the stamped mark differs slightly from the nominal template
+    opacity_scale: [0.92, 1.08]
+    overlay_shift: [-5.0, 5.0]
+    blur_prob: 0.3
+    blur_sigma: [0.1, 0.35]
+  quality_jitter_prob: 0.05
+  wrong_id_prob: 0.05       # hint rendered with another ID (re-used photos)
+  quality_jitter_range: [70, 95]
+  hint_scale: 8.0
+  val_samples: 512
+  num_workers: 10
+  preview_csv: data_gen/backgrounds/cian_index.csv
+  preview_count: 6
+
+model:
+  in_channels: 7
+  widths: [24, 48, 64, 96]
+
+training:
+  epochs: 6
+  steps_per_epoch: 1000
+  batch_size: 16
+  lr: 1.0e-3
+  min_lr: 2.0e-5
+  warmup_steps: 300
+  weight_decay: 1.0e-4
+  grad_clip: 1.0
+  amp: true
+  ema_decay: 0.999
+  val_every: 1
+
+loss:
+  region_weight: 10.0
+  pixel: 1.0
+  grad: 1.0
+
+checkpointing:
+  dir: ./runs/_ckpt_unused     # replaced by the run folder at start
+  keep_last: 3
+
+logging:
+  dir: ./runs/overlay_cian_low
+  log_every: 50
+
+seed: 42
+device: cuda
