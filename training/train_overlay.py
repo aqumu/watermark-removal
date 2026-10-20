@@ -123,8 +123,11 @@ def main():
     train_loader = DataLoader(train_ds, batch_size=bs, shuffle=False, num_workers=nw, drop_last=True,
                               pin_memory=use_cuda, persistent_workers=nw > 0, worker_init_fn=worker_init,
                               prefetch_factor=int(dc.get("prefetch", 2)) if nw > 0 else None)
-    val_loader = DataLoader(val_ds, batch_size=bs, shuffle=False, num_workers=nw,
-                            pin_memory=use_cuda, persistent_workers=nw > 0, worker_init_fn=worker_init)
+    # validation is small: a few short-lived workers (each worker process loads torch's CUDA
+    # libraries, and a second persistent pool of them can exhaust Windows' commit limit)
+    vw = min(nw, int(dc.get("val_workers", 2)))
+    val_loader = DataLoader(val_ds, batch_size=bs, shuffle=False, num_workers=vw,
+                            pin_memory=use_cuda, persistent_workers=False, worker_init_fn=worker_init)
 
     model = build_model(cfg)
     n_params = count_params(model)
