@@ -94,6 +94,7 @@ class OverlayTrainer:
         self.criterion = OverlayLoss(cfg)
         self.ema = EMA(self.model, float(tc.get("ema_decay", 0.999))) if tc.get("ema_decay", 0) > 0 else None
         self.hint_scale = float(cfg["data"].get("hint_scale", 8.0))
+        self.teacher, self.w_distill = self._load_teacher(cfg.get("distill"))
 
         self.ckpt_dir = Path(cfg["checkpointing"]["dir"])
         self.keep_last = int(cfg["checkpointing"].get("keep_last", 3))
@@ -113,6 +114,23 @@ class OverlayTrainer:
             self.model.load_state_dict(ckpt["model"])
             print(f"Loaded weights from {load_weights}")
         self.global_step = (self.start_epoch - 1) * self.steps_per_epoch
+
+    def _load_teacher(self, dc: dict | None):
+        """Optional distillation: a trained (larger) model whose prediction the student also matches.
+
+        The teacher's output is a less noisy target than the JPEG'd clean image,
+        whose own compression noise cannot be predicted from the input.
+        """
+        if not dc:
+            return None, 0.0
+        from .model import build_model
+        teacher = build_model({"model": dc["model"]})
+        teacher.load_state_dict(torch.load(dc["checkpoint"], map_location="cpu", weights_only=True)["model"])
+        teacher.to(self.device, memory_format=torch.channels_last).eval()
+        for p in teacher.parameters():
+            p.requires_grad_(False)
+        print(f"Distilling from {dc['checkpoint']} (weight {dc.get('weight', 1.0)})")
+        return teacher, float(dc.get("weight", 1.0))
 
     # ── schedule ─────────────────────────────────────────────────────────────
 
@@ -151,6 +169,15 @@ class OverlayTrainer:
             target, region, m_true = self._targets(batch)
             pred, _ = self._forward(batch, self.model)
             loss, parts = self.criterion(pred, target, region, m_true)
+            if self.teacher is not None:
+                with torch.no_grad():
+                    t_pred, _ = self._forward(batch, self.teacher)
+                weight = 1.0 + self.criterion.region_weight * region
+                d = pred - t_pred
+                distill = (torch.sqrt(d * d + 1e-6) * weight).sum() / (weight.sum() * d.shape[1])
+                loss = loss + self.w_distill * distill
+                parts["distill"] = distill.detach()
+                parts["total"] = loss.detach()
             self.optimizer.zero_grad(set_to_none=True)
             loss.backward()
             grad_norm = float(torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.grad_clip))

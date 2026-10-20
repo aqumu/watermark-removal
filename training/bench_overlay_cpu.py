@@ -58,14 +58,16 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--threads", type=int, nargs="+", default=[1, 4])
     ap.add_argument("--batch", type=int, nargs="+", default=[1, 8])
-    ap.add_argument("--widths", nargs="+", default=["24,48,64,96", "32,64,96,128", "16,32,48,64"])
+    ap.add_argument("--widths", nargs="+", default=["24,48,64,96", "32,64,96,128", "16,32,48,64"],
+                    help="comma-separated widths, optionally '@k' for pixel-unshuffle k, e.g. 48,64,96,128@2")
     args = ap.parse_args()
     ww, wh = load_mark("cian").window
     shape = (7, wh, ww)
     for wstr in args.widths:
-        widths = tuple(int(v) for v in wstr.split(","))
-        model = OverlayUNet(widths=widths).eval()
-        print(f"widths {widths}: {count_params(model):,} params, {macs(model, shape) / 1e9:.2f} GMAC per window")
+        wpart, _, upart = wstr.partition("@")
+        widths = tuple(int(v) for v in wpart.split(","))
+        model = OverlayUNet(widths=widths, unshuffle=int(upart or 1)).eval()
+        print(f"widths {widths} unshuffle {model.unshuffle}: {count_params(model):,} params, {macs(model, shape) / 1e9:.2f} GMAC per window")
         for th in args.threads:
             torch.set_num_threads(th)
             for b in args.batch:

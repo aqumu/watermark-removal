@@ -17,18 +17,9 @@ data_gen/data/failed_urls.txt
 data_gen/*.egg-info/
 data_gen/generate_synthetic.py
 
-# Training runs — ignore everything except the canonical example run
+# Training runs (metrics, previews, checkpoints) stay local
 /runs/
-training/runs/removal_256/
-training/runs/segmentation/
-training/runs/removal_512/*/
-!training/runs/removal_512/removal_512__20260415_220210/
-# Never commit checkpoint weights, even inside the example run
-training/runs/removal_512/removal_512__20260415_220210/artifacts/checkpoints/*.pth
-training/runs/overfit_*/
-training/runs/synthetic_test/
-training/runs/*/*/meta/control/
-training/runs/*/*/tracker/
+training/runs/
 
 # Root-level training outputs and experiment scratch files
 training/artifacts/

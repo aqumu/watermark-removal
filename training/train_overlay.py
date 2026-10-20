@@ -119,7 +119,7 @@ def main():
     use_cuda = cfg["device"] == "cuda"
     train_loader = DataLoader(train_ds, batch_size=bs, shuffle=False, num_workers=nw, drop_last=True,
                               pin_memory=use_cuda, persistent_workers=nw > 0, worker_init_fn=worker_init,
-                              prefetch_factor=4 if nw > 0 else None)
+                              prefetch_factor=int(dc.get("prefetch", 2)) if nw > 0 else None)
     val_loader = DataLoader(val_ds, batch_size=bs, shuffle=False, num_workers=nw,
                             pin_memory=use_cuda, persistent_workers=nw > 0, worker_init_fn=worker_init)
 
