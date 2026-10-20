@@ -54,6 +54,9 @@ def load_cfg(path: str) -> dict:
         for key in ("csv", "dir"):
             if key in src and not Path(src[key]).is_absolute():
                 src[key] = str(REPO_ROOT / src[key])
+    dist = cfg.get("distill")
+    if dist and not Path(dist["checkpoint"]).is_absolute():
+        dist["checkpoint"] = str(REPO_ROOT / dist["checkpoint"])
     prev = cfg["data"].get("preview_csv")
     if prev and not Path(prev).is_absolute():
         cfg["data"]["preview_csv"] = str(REPO_ROOT / prev)
