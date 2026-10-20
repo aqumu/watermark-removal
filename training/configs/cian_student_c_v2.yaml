@@ -1,5 +1,5 @@
 # Cian student C v2: half-resolution U-Net (pixel-unshuffle 2), widths [32,48,64,96],
-# distilled from teacher ft4 on the ft4 data (text-line search, logo-only and double marks).
+# distilled from teacher ft5 on the ft5 data (text-line search, mark scale, logo-only and double marks).
 mark: cian
 
 data:
@@ -20,7 +20,8 @@ data:
     sharpness: [-0.9, 0.4]
   quality_jitter_prob: 0.05
   wrong_id_prob: 0.05       # hint rendered with another ID (re-used photos)
-  text_offset: {x: [-3.5, 3.5], y: [-2.5, 2.5]}   # stamped text line vs its nominal placement
+  text_offset: {x: [-5.0, 5.0], y: [-3.5, 3.5]}   # stamped text line vs its nominal placement
+  mark_scale: [0.97, 1.03]  # stamped size vs the template
   no_text_prob: 0.015       # marks with the logo only
   double_mark_prob: 0.08    # a second mark (another listing) under the listing's own, unhinted
   quality_jitter_range: [70, 95]
@@ -66,7 +67,7 @@ seed: 42
 device: cuda
 
 distill:
-  checkpoint: training/runs/teachers/teacher_ft4_best.pth
+  checkpoint: training/runs/teachers/teacher_ft5_best.pth
   weight: 1.0
   model:
     in_channels: 7
