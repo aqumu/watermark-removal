@@ -105,31 +105,43 @@ class MarkProfile:
 
     # ── rendering ────────────────────────────────────────────────────────────
 
-    def render_frame(self, listing_id: str, style: str | None = None) -> np.ndarray:
-        """Opacity map of the full mark for an ID in its own frame (cached per ID and style)."""
+    def render_frame(self, listing_id: str, style: str | None = None,
+                     text_offset: tuple[float, float] = (0.0, 0.0)) -> np.ndarray:
+        """Opacity map of the full mark for an ID in its own frame (cached).
+
+        style "none" renders the logo without a text line. text_offset moves the
+        text line relative to the logo (the placement varies between photos).
+        """
         style = style or self.default_style
-        key = (str(listing_id), style)
+        key = (str(listing_id), style, round(text_offset[0], 2), round(text_offset[1], 2))
         cache = self.__dict__.setdefault("_frame_cache", {})
         if key not in cache:
-            if len(cache) > 32:
+            if len(cache) > 64:
                 cache.clear()
             m = self.logo.copy()
-            st = self.styles[style]
-            text = self.text_prefix + str(listing_id)
-            x_left = st.center_x - text_ink_width(text, st) / 2
-            cov, tx, ty = text_coverage(text, st, x_left, st.top)
-            _paste_add(m, cov * st.opacity, tx, ty)
+            if style != "none":
+                st = self.styles[style]
+                text = self.text_prefix + str(listing_id)
+                x_left = st.center_x + text_offset[0] - text_ink_width(text, st) / 2
+                cov, tx, ty = text_coverage(text, st, x_left, st.top + text_offset[1])
+                _paste_add(m, cov * st.opacity, tx, ty)
             cache[key] = m
         return cache[key]
 
+    def render_text_only(self, listing_id: str, style: str,
+                         text_offset: tuple[float, float] = (0.0, 0.0)) -> np.ndarray:
+        """Frame-sized opacity of the text line alone."""
+        return self.render_frame(listing_id, style, text_offset) - self.logo
+
     def render(self, listing_id: str, dx: float = 0.0, dy: float = 0.0,
-               size: tuple[int, int] | None = None, style: str | None = None) -> np.ndarray:
+               size: tuple[int, int] | None = None, style: str | None = None,
+               text_offset: tuple[float, float] = (0.0, 0.0)) -> np.ndarray:
         """Opacity map of the full mark for an ID, with the frame origin at (dx, dy).
 
         With size=(w, h) the canvas is w x h; otherwise it is frame-sized. Fractional
         offsets are applied with a Lanczos shift of the frame rendering.
         """
-        frame = self.render_frame(listing_id, style)
+        frame = self.render_frame(listing_id, style, text_offset)
         fw, fh = self.frame_size
         w, h = size if size is not None else (fw, fh)
         ix, iy = math.floor(dx), math.floor(dy)

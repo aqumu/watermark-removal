@@ -26,8 +26,8 @@ def prepare_window(rgb: np.ndarray, profile: MarkProfile, listing_id: str, hint_
     if win.shape[0] != wh or win.shape[1] != ww:  # image smaller than the window: pad by edge replication
         win = np.pad(win, ((0, wh - win.shape[0]), (0, ww - win.shape[1]), (0, 0)), mode="edge")
     ex, ey = profile.expected_origin(w, h)
-    lx, ly, score, style = localize(win, profile, listing_id, prior=(ex - x0, ey - y0))
-    hint = profile.render(listing_id, lx, ly, size=(ww, wh), style=style)
+    lx, ly, score, style, text_offset = localize(win, profile, listing_id, prior=(ex - x0, ey - y0))
+    hint = profile.render(listing_id, lx, ly, size=(ww, wh), style=style, text_offset=text_offset)
     wm_u8 = torch.from_numpy(np.ascontiguousarray(win.transpose(2, 0, 1)))[None]
     x = build_input(wm_u8, torch.from_numpy(hint)[None, None], profile.overlay, hint_scale)
     return (x0, y0), x, (lx, ly, score, style)

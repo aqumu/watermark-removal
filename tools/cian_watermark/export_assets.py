@@ -125,6 +125,15 @@ if __name__ == "__main__":
     print(f"text opacity set to the logo's solid opacity {solid}")
     style_probs = json.loads((OUT_DIR / "style_stats.json").read_text())["probs"] \
         if (OUT_DIR / "style_stats.json").exists() else {"bold": 0.75, "regular": 0.25}
+    # geometry and shares re-fitted on photos registered on the logo alone (refit_text.py);
+    # the placement still varies by a few pixels per photo, which the localiser searches for.
+    # Marks without a text line ("none", ~1%) are handled by the localiser / training config.
+    refit = OUT_DIR / "text_refit.json"
+    if refit.exists():
+        r = json.loads(refit.read_text())
+        for k, v in r["styles"].items():
+            styles[k].update(v)
+        style_probs = r["probs"]
     for k, v in styles.items():
         v["prob"] = style_probs.get(k, 0.0)
     sizes = sorted({tuple(p["size"]) for p in positions})

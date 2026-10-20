@@ -13,7 +13,7 @@ from __future__ import annotations
 import cv2
 import numpy as np
 
-from .profile import MarkProfile
+from .profile import MarkProfile, shift_image
 
 _LUMA = np.array([0.299, 0.587, 0.114], np.float32)
 HP_SIGMA = 6.0
@@ -58,20 +58,80 @@ def search_box(profile: MarkProfile, prior: tuple[float, float], window_shape: t
     return x0, y0, max(x0, x1), max(y0, y1)
 
 
+TEXT_SEARCH = (4, 3)        # +- px around a style's nominal text placement (x, y)
+MIN_TEXT_SCORE = 0.12       # below this (with a clearly visible logo) the mark has no text line
+
+
+def locate_text(window_detail: np.ndarray, profile: MarkProfile, listing_id: str, x: float, y: float,
+                styles: list[str] | None = None) -> tuple[str, tuple[float, float], float]:
+    """Best text style and placement (offset from the style's nominal position) for a mark at (x, y).
+
+    The text line's placement relative to the logo varies between photos by a few
+    pixels, so it is searched separately once the logo has fixed the frame.
+    """
+    sx, sy = TEXT_SEARCH
+    h, w = window_detail.shape
+    best = (profile.default_style, (0.0, 0.0), 0.0)
+    for style in styles or list(profile.styles):
+        t = profile.render_text_only(listing_id, style)
+        ys, xs = np.nonzero(t > 1e-3)
+        if len(xs) == 0:
+            continue
+        # text template (with margin) and the window region it may occupy
+        ty0, ty1, tx0, tx1 = ys.min() - 2, ys.max() + 3, xs.min() - 2, xs.max() + 3
+        tmpl = shift_image(t, x - np.floor(x), y - np.floor(y))[ty0:ty1, tx0:tx1]
+        ox, oy = int(np.floor(x)) + tx0, int(np.floor(y)) + ty0
+        rx0, ry0 = max(0, ox - sx), max(0, oy - sy)
+        rx1, ry1 = min(w, ox + tmpl.shape[1] + sx), min(h, oy + tmpl.shape[0] + sy)
+        region = window_detail[ry0:ry1, rx0:rx1]
+        if region.shape[0] < tmpl.shape[0] or region.shape[1] < tmpl.shape[1]:
+            continue
+        score = cv2.matchTemplate(region, detail(tmpl), cv2.TM_CCOEFF_NORMED)
+        a = np.abs(score)
+        j, i = np.unravel_index(int(a.argmax()), a.shape)
+        fx = _parabola(a[j, i - 1], a[j, i], a[j, i + 1]) if 0 < i < a.shape[1] - 1 else 0.0
+        fy = _parabola(a[j - 1, i], a[j, i], a[j + 1, i]) if 0 < j < a.shape[0] - 1 else 0.0
+        off = (rx0 + i + fx - ox, ry0 + j + fy - oy)
+        if a[j, i] > abs(best[2]):
+            best = (style, (float(off[0]), float(off[1])), float(score[j, i]))
+    return best
+
+
 def localize(window_rgb: np.ndarray, profile: MarkProfile, listing_id: str,
              prior: tuple[float, float] | None = None,
-             styles: list[str] | None = None) -> tuple[float, float, float, str]:
-    """Return (x, y, score, style): the mark frame's top-left inside the window, the
-    signed NCC peak and the best-matching text style.
+             styles: list[str] | None = None) -> tuple[float, float, float, str, tuple[float, float]]:
+    """Return (x, y, score, style, text_offset).
 
-    prior: the expected frame origin inside the window; the search is limited to
-    the profile's jitter range around it (plus a small margin).
+    1. coarse: the full mark (each style at its nominal text placement) finds the
+       neighbourhood; it carries more signal than the logo alone;
+    2. logo: the logo alone (identical in every variant) fixes the origin within
+       +-3 px of it, so an off-nominal text line cannot pull the frame;
+    3. text: the text line is searched separately around its nominal placement
+       (it varies between photos by a few px); "none" if the logo is clear but no
+       text line is;
+    4. final: the full mark with the text where it was found re-fixes the origin
+       within +-2 px (most signal, and the text no longer pulls it off).
+    prior: the expected frame origin inside the window; the coarse search is
+    limited to the profile's jitter range around it (plus a small margin).
     """
     wd = detail(window_rgb.astype(np.float32) @ _LUMA)
     box = search_box(profile, prior, wd.shape) if prior is not None else None
-    best = None
-    for style in styles or list(profile.styles):
-        x, y, s = _match(wd, profile.render(listing_id, style=style), box)
-        if best is None or abs(s) > abs(best[2]):
-            best = (x, y, s, style)
-    return best
+    coarse = None
+    for st in styles or list(profile.styles):
+        x, y, s = _match(wd, profile.render(listing_id, style=st), box)
+        if coarse is None or abs(s) > abs(coarse[2]):
+            coarse = (x, y, s)
+    x, y, s = _match(wd, profile.logo, _local_box(coarse[0], coarse[1], profile, wd.shape))
+    style, offset, ts = locate_text(wd, profile, listing_id, x, y, styles)
+    if abs(ts) < MIN_TEXT_SCORE:
+        style, offset = ("none", (0.0, 0.0)) if abs(s) >= 0.3 else (style, (0.0, 0.0))
+    # 4. final: the full mark with its text where it was found carries the most signal
+    x, y, s = _match(wd, profile.render_frame(listing_id, style, offset), _local_box(x, y, profile, wd.shape, r=2))
+    return x, y, s, style, offset
+
+
+def _local_box(x: float, y: float, profile: MarkProfile, shape, r: int = 3) -> tuple[int, int, int, int]:
+    h, w = shape
+    fw, fh = profile.frame_size
+    x0, y0 = max(0, int(round(x)) - r), max(0, int(round(y)) - r)
+    return x0, y0, max(x0, min(w - fw, int(round(x)) + r)), max(y0, min(h - fh, int(round(y)) + r))

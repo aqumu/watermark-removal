@@ -141,12 +141,22 @@ class OverlaySynthDataset(Dataset):
                 return np.ascontiguousarray(region[..., ::-1])
         raise RuntimeError("could not sample a background region")
 
+    def _style_and_offset(self, rng: random.Random) -> tuple[str, tuple[float, float]]:
+        """Text style of a stamped mark (or "none") and its text-line offset from the nominal placement."""
+        p = self.profile
+        if rng.random() < self.cfg.get("no_text_prob", 0.0):
+            return "none", (0.0, 0.0)
+        names = list(p.styles)
+        style = rng.choices(names, [p.styles[n].prob for n in names])[0]
+        jx, jy = self.cfg.get("text_offset", {}).get("x", [0, 0]), self.cfg.get("text_offset", {}).get("y", [0, 0])
+        return style, (rng.uniform(*jx), rng.uniform(*jy))
+
     def _true_mark(self, rng: random.Random, listing_id: str, style: str, x: float, y: float,
-                   size: tuple[int, int]) -> tuple[np.ndarray, float]:
+                   size: tuple[int, int], text_offset: tuple[float, float] = (0.0, 0.0)) -> tuple[np.ndarray, float]:
         """The mark as stamped: nominal template with a small random deviation."""
         p = self.profile
         dev = self.cfg["mark_deviation"]
-        m = p.render(listing_id, x, y, size=size, style=style)
+        m = p.render(listing_id, x, y, size=size, style=style, text_offset=text_offset)
         if "sharpness" in dev:
             # real marks are on average a bit softer than the template and vary per photo
             # (each photo resized from a different original): m + k * highpass(m),
@@ -179,10 +189,9 @@ class OverlaySynthDataset(Dataset):
 
         lengths, lprobs = zip(*p.id_lengths.items())
         listing_id = random_listing_id(rng, rng.choices(lengths, lprobs)[0])
-        names = list(p.styles)
-        style = rng.choices(names, [p.styles[n].prob for n in names])[0]
+        style, text_offset = self._style_and_offset(rng)
         bg = self._background_region(rng, rw, rh).astype(np.float32)
-        m_true, overlay = self._true_mark(rng, listing_id, style, tx + g, ty + g, (rw, rh))
+        m_true, overlay = self._true_mark(rng, listing_id, style, tx + g, ty + g, (rw, rh), text_offset)
         base = bg
         if rng.random() < self.cfg.get("double_mark_prob", 0.0):
             # a photo re-used from another listing keeps that listing's mark and gets a second
@@ -193,9 +202,9 @@ class OverlaySynthDataset(Dataset):
                 dy = rng.uniform(*jy) - rng.uniform(*jy)
                 if abs(dx) > 3 or abs(dy) > 3:
                     break
-            other_style = rng.choices(names, [p.styles[n].prob for n in names])[0]
+            other_style, other_offset = self._style_and_offset(rng)
             m_other, overlay_other = self._true_mark(rng, random_listing_id(rng, len(listing_id)), other_style,
-                                                     tx + g + dx, ty + g + dy, (rw, rh))
+                                                     tx + g + dx, ty + g + dy, (rw, rh), other_offset)
             base = p.composite(bg, m_other, overlay_other)
         stamped = np.clip(np.rint(p.composite(base, m_true, overlay)), 0, 255).astype(np.uint8)
         if base is not bg:
@@ -213,8 +222,8 @@ class OverlaySynthDataset(Dataset):
         hint_id = listing_id
         if rng.random() < self.cfg.get("wrong_id_prob", 0.0):
             hint_id = random_listing_id(rng, len(listing_id))
-        lx, ly, score, found_style = localize(wm, p, hint_id, prior=(ex - wx0, ey - wy0))
-        hint = p.render(hint_id, lx, ly, size=(ww, wh), style=found_style)
+        lx, ly, score, found_style, found_offset = localize(wm, p, hint_id, prior=(ex - wx0, ey - wy0))
+        hint = p.render(hint_id, lx, ly, size=(ww, wh), style=found_style, text_offset=found_offset)
 
         # loss region: every 16x16 macroblock the mark touches, one block of margin
         touched = (m_true > 1e-3).astype(np.uint8)
