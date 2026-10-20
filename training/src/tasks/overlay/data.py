@@ -147,7 +147,13 @@ class OverlaySynthDataset(Dataset):
         p = self.profile
         dev = self.cfg["mark_deviation"]
         m = p.render(listing_id, x, y, size=size, style=style)
-        if rng.random() < dev.get("blur_prob", 0.0):
+        if "sharpness" in dev:
+            # real marks are on average a bit softer than the template and vary per photo
+            # (each photo resized from a different original): m + k * highpass(m),
+            # k < 0 softens, k > 0 sharpens
+            k = rng.uniform(*dev["sharpness"])
+            m = m + k * (m - cv2.GaussianBlur(m, (0, 0), 1.0))
+        elif rng.random() < dev.get("blur_prob", 0.0):
             m = cv2.GaussianBlur(m, (0, 0), rng.uniform(*dev["blur_sigma"]))
         m = m * rng.uniform(*dev["opacity_scale"])
         overlay = p.overlay + rng.uniform(*dev["overlay_shift"])
