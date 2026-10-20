@@ -138,7 +138,8 @@ class OverlayTrainer:
     def _targets(self, batch: dict):
         target = to_unit(batch["target"].to(self.device, non_blocking=True))
         region = batch["region"].to(self.device, non_blocking=True).float()
-        return target, region
+        m_true = batch["m_true"].to(self.device, non_blocking=True).float()
+        return target, region, m_true
 
     def _train_epoch(self, epoch: int) -> None:
         self.model.train()
@@ -147,9 +148,9 @@ class OverlayTrainer:
             lr = self._lr(self.global_step)
             for group in self.optimizer.param_groups:
                 group["lr"] = lr
-            target, region = self._targets(batch)
+            target, region, m_true = self._targets(batch)
             pred, _ = self._forward(batch, self.model)
-            loss, parts = self.criterion(pred, target, region)
+            loss, parts = self.criterion(pred, target, region, m_true)
             self.optimizer.zero_grad(set_to_none=True)
             loss.backward()
             grad_norm = float(torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.grad_clip))
@@ -185,13 +186,14 @@ class OverlayTrainer:
         model = self._eval_model()
         model.eval()
         sums = {"psnr": 0.0, "psnr_masked": 0.0, "psnr_input_masked": 0.0, "mae_mark": 0.0,
-                "loc_err": 0.0, "style_ok": 0.0}
+                "loc_err": 0.0, "style_ok": 0.0, "ghost": 0.0}
         p999 = []
         n = 0
         first = None
         for batch in self.val_loader:
-            target, region = self._targets(batch)
+            target, region, m_true = self._targets(batch)
             pred, wm = self._forward(batch, model)
+            sums["ghost"] += float(OverlayLoss.ghost_amplitude(pred, target, m_true, self.profile.overlay).abs().sum())
             b = target.shape[0]
             sums["psnr"] += float(psnr(pred, target).sum())
             sums["psnr_masked"] += float(psnr(pred, target, region).sum())
@@ -213,7 +215,7 @@ class OverlayTrainer:
                              **{k: f"{v:.4f}" for k, v in row.items()}})
         print(f"  val psnr={row['psnr']:.2f} masked={row['psnr_masked']:.2f} "
               f"(input {row['psnr_input_masked']:.2f}) mae_mark={row['mae_mark']:.3f} "
-              f"p99.9={row['p999_mark']:.2f} levels, loc_err={row['loc_err']:.2f}px")
+              f"p99.9={row['p999_mark']:.2f} levels, ghost={row['ghost']:.4f}, loc_err={row['loc_err']:.2f}px")
         if self.experiment is not None:
             self.experiment.log_preview_set(epoch, {**self._synthetic_preview(first),
                                                     **self._real_previews(model)})

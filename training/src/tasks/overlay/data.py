@@ -210,6 +210,7 @@ class OverlaySynthDataset(Dataset):
             "hint": torch.from_numpy(hint[None].astype(np.float16)),
             "target": chw(clean),
             "region": torch.from_numpy(region[None]),
+            "m_true": torch.from_numpy(m_true[None].astype(np.float16)),
             "loc_err": torch.tensor([lx - tx, ly - ty], dtype=torch.float32),
             "loc_score": torch.tensor(score, dtype=torch.float32),
             "style_ok": torch.tensor(found_style == style),

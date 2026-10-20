@@ -8,6 +8,11 @@ grid against the JPEG'd clean target.
           region. Leftover mark edges show up as gradient errors long before
           they move the mean pixel error, and edges are what a contrast boost
           reveals.
+  ghost : |least-squares amplitude| of the residual along the true mark
+          signal m * (overlay - clean), per sample (smoothed at 0, so the pull
+          towards zero does not fade as the leftover gets small). A faint leftover mark is
+          below the target's own JPEG noise per pixel but coherent over the
+          whole mark; this measures exactly that (1 = untouched, 0 = gone).
 """
 from __future__ import annotations
 
@@ -27,9 +32,27 @@ class OverlayLoss(nn.Module):
         self.region_weight = float(lc.get("region_weight", 10.0))
         self.w_pixel = float(lc.get("pixel", 1.0))
         self.w_grad = float(lc.get("grad", 1.0))
+        self.w_ghost = float(lc.get("ghost", 0.0))
+        self.overlay = float(cfg.get("overlay", 234.0))
         self.eps = 1e-3
 
-    def forward(self, pred: torch.Tensor, target: torch.Tensor, region: torch.Tensor):
+    @staticmethod
+    def _ghost_terms(pred, target, m_true, overlay):
+        luma = pred.new_tensor([0.299, 0.587, 0.114]).view(1, 3, 1, 1)
+        e = ((pred - target) * luma).sum(1, keepdim=True)
+        clean = ((target + 1) * 127.5 * luma).sum(1, keepdim=True)
+        sig = m_true * (overlay - clean) / 127.5
+        return (e * sig).sum(dim=(1, 2, 3)), (sig * sig).sum(dim=(1, 2, 3))
+
+    @classmethod
+    def ghost_amplitude(cls, pred: torch.Tensor, target: torch.Tensor, m_true: torch.Tensor,
+                        overlay: float) -> torch.Tensor:
+        """Per-sample amplitude of the mark left in pred (inputs in [-1, 1], m_true Bx1xHxW)."""
+        num, den = cls._ghost_terms(pred, target, m_true, overlay)
+        return num / den.clamp(min=1e-3)
+
+    def forward(self, pred: torch.Tensor, target: torch.Tensor, region: torch.Tensor,
+                m_true: torch.Tensor | None = None):
         err = pred - target
         weight = 1.0 + self.region_weight * region
         charb = torch.sqrt(err * err + self.eps ** 2)
@@ -40,4 +63,12 @@ class OverlayLoss(nn.Module):
         grad = ((gx.abs() * rx).sum() + (gy.abs() * ry).sum()) / ((rx.sum() + ry.sum()) * err.shape[1] + 1e-6)
 
         total = self.w_pixel * pixel + self.w_grad * grad
-        return total, {"total": total.detach(), "pixel": pixel.detach(), "grad": grad.detach()}
+        parts = {"pixel": pixel.detach(), "grad": grad.detach()}
+        if self.w_ghost > 0 and m_true is not None:
+            # |amplitude|, smoothly down-weighted when the mark signal itself is weak
+            # (background close to the overlay level), where the amplitude is noise
+            num, den = self._ghost_terms(pred, target, m_true, self.overlay)
+            ghost = torch.sqrt(num ** 2 / (den * (den + 10.0)).clamp(min=1e-6) + 1e-6).mean()
+            total = total + self.w_ghost * ghost
+            parts["ghost"] = ghost.detach()
+        return total, {"total": total.detach(), **parts}
