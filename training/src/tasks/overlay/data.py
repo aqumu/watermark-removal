@@ -156,7 +156,8 @@ class OverlaySynthDataset(Dataset):
         """The mark as stamped: nominal template with a small random deviation."""
         p = self.profile
         dev = self.cfg["mark_deviation"]
-        m = p.render(listing_id, x, y, size=size, style=style, text_offset=text_offset)
+        scale = rng.uniform(*self.cfg.get("mark_scale", [1.0, 1.0]))
+        m = p.render(listing_id, x, y, size=size, style=style, text_offset=text_offset, scale=scale)
         if "sharpness" in dev:
             # real marks are on average a bit softer than the template and vary per photo
             # (each photo resized from a different original): m + k * highpass(m),
@@ -222,8 +223,9 @@ class OverlaySynthDataset(Dataset):
         hint_id = listing_id
         if rng.random() < self.cfg.get("wrong_id_prob", 0.0):
             hint_id = random_listing_id(rng, len(listing_id))
-        lx, ly, score, found_style, found_offset = localize(wm, p, hint_id, prior=(ex - wx0, ey - wy0))
-        hint = p.render(hint_id, lx, ly, size=(ww, wh), style=found_style, text_offset=found_offset)
+        lx, ly, score, found_style, found_offset, found_scale = localize(wm, p, hint_id, prior=(ex - wx0, ey - wy0))
+        hint = p.render(hint_id, lx, ly, size=(ww, wh), style=found_style, text_offset=found_offset,
+                        scale=found_scale)
 
         # loss region: every 16x16 macroblock the mark touches, one block of margin
         touched = (m_true > 1e-3).astype(np.uint8)

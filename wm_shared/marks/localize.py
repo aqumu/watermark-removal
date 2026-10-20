@@ -58,12 +58,13 @@ def search_box(profile: MarkProfile, prior: tuple[float, float], window_shape: t
     return x0, y0, max(x0, x1), max(y0, y1)
 
 
-TEXT_SEARCH = (4, 3)        # +- px around a style's nominal text placement (x, y)
+TEXT_SEARCH = (6, 4)        # +- px around a style's nominal text placement (x, y)
 MIN_TEXT_SCORE = 0.12       # below this (with a clearly visible logo) the mark has no text line
+SCALES = (0.98, 0.99, 1.0, 1.01, 1.02)   # stamped size varies by a few % between photos
 
 
 def locate_text(window_detail: np.ndarray, profile: MarkProfile, listing_id: str, x: float, y: float,
-                styles: list[str] | None = None) -> tuple[str, tuple[float, float], float]:
+                styles: list[str] | None = None, scale: float = 1.0) -> tuple[str, tuple[float, float], float]:
     """Best text style and placement (offset from the style's nominal position) for a mark at (x, y).
 
     The text line's placement relative to the logo varies between photos by a few
@@ -74,6 +75,8 @@ def locate_text(window_detail: np.ndarray, profile: MarkProfile, listing_id: str
     best = (profile.default_style, (0.0, 0.0), 0.0)
     for style in styles or list(profile.styles):
         t = profile.render_text_only(listing_id, style)
+        if scale != 1.0:
+            t = profile.place(t, scale=scale)
         ys, xs = np.nonzero(t > 1e-3)
         if len(xs) == 0:
             continue
@@ -99,8 +102,8 @@ def locate_text(window_detail: np.ndarray, profile: MarkProfile, listing_id: str
 
 def localize(window_rgb: np.ndarray, profile: MarkProfile, listing_id: str,
              prior: tuple[float, float] | None = None,
-             styles: list[str] | None = None) -> tuple[float, float, float, str, tuple[float, float]]:
-    """Return (x, y, score, style, text_offset).
+             styles: list[str] | None = None) -> tuple[float, float, float, str, tuple[float, float], float]:
+    """Return (x, y, score, style, text_offset, scale).
 
     1. coarse: the full mark (each style at its nominal text placement) finds the
        neighbourhood; it carries more signal than the logo alone;
@@ -121,13 +124,23 @@ def localize(window_rgb: np.ndarray, profile: MarkProfile, listing_id: str,
         x, y, s = _match(wd, profile.render(listing_id, style=st), box)
         if coarse is None or abs(s) > abs(coarse[2]):
             coarse = (x, y, s)
-    x, y, s = _match(wd, profile.logo, _local_box(coarse[0], coarse[1], profile, wd.shape))
-    style, offset, ts = locate_text(wd, profile, listing_id, x, y, styles)
+    # logo refine, also over a few scales (the stamped size varies by a few % between photos)
+    best = None
+    for sc in SCALES:
+        logo = profile.logo if sc == 1.0 else profile.place(profile.logo, scale=sc)
+        x, y, s = _match(wd, logo, _local_box(coarse[0], coarse[1], profile, wd.shape))
+        if best is None or abs(s) > abs(best[2]):
+            best = (x, y, s, sc)
+    x, y, s, scale = best
+    style, offset, ts = locate_text(wd, profile, listing_id, x, y, styles, scale)
     if abs(ts) < MIN_TEXT_SCORE:
         style, offset = ("none", (0.0, 0.0)) if abs(s) >= 0.3 else (style, (0.0, 0.0))
     # 4. final: the full mark with its text where it was found carries the most signal
-    x, y, s = _match(wd, profile.render_frame(listing_id, style, offset), _local_box(x, y, profile, wd.shape, r=2))
-    return x, y, s, style, offset
+    full = profile.render_frame(listing_id, style, offset)
+    if scale != 1.0:
+        full = profile.place(full, scale=scale)
+    x, y, s = _match(wd, full, _local_box(x, y, profile, wd.shape, r=2))
+    return x, y, s, style, offset, scale
 
 
 def _local_box(x: float, y: float, profile: MarkProfile, shape, r: int = 3) -> tuple[int, int, int, int]:

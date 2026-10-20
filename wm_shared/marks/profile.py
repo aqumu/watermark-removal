@@ -135,21 +135,31 @@ class MarkProfile:
 
     def render(self, listing_id: str, dx: float = 0.0, dy: float = 0.0,
                size: tuple[int, int] | None = None, style: str | None = None,
-               text_offset: tuple[float, float] = (0.0, 0.0)) -> np.ndarray:
+               text_offset: tuple[float, float] = (0.0, 0.0), scale: float = 1.0) -> np.ndarray:
         """Opacity map of the full mark for an ID, with the frame origin at (dx, dy).
 
         With size=(w, h) the canvas is w x h; otherwise it is frame-sized. Fractional
-        offsets are applied with a Lanczos shift of the frame rendering.
+        offsets and scale (about the frame centre; the stamped size varies by a few %
+        between photos) are applied with Lanczos resampling of the frame rendering.
         """
-        frame = self.render_frame(listing_id, style, text_offset)
+        return self.place(self.render_frame(listing_id, style, text_offset), dx, dy, size, scale)
+
+    def place(self, frame_map: np.ndarray, dx: float = 0.0, dy: float = 0.0,
+              size: tuple[int, int] | None = None, scale: float = 1.0) -> np.ndarray:
+        """Put a frame-sized map on a canvas with its origin at (dx, dy), scaled about the frame centre."""
         fw, fh = self.frame_size
         w, h = size if size is not None else (fw, fh)
-        ix, iy = math.floor(dx), math.floor(dy)
-        fx, fy = dx - ix, dy - iy
-        shifted = frame if (fx == 0 and fy == 0) else shift_image(frame, fx, fy, size=(fw + 1, fh + 1))
-        m = np.zeros((h, w), np.float32)
-        _paste_add(m, shifted, ix, iy)
-        return m
+        if scale == 1.0:
+            ix, iy = math.floor(dx), math.floor(dy)
+            fx, fy = dx - ix, dy - iy
+            shifted = frame_map if (fx == 0 and fy == 0) else shift_image(frame_map, fx, fy, size=(fw + 1, fh + 1))
+            m = np.zeros((h, w), np.float32)
+            _paste_add(m, shifted, ix, iy)
+            return m
+        cx, cy = fw / 2.0, fh / 2.0
+        mat = np.array([[scale, 0, cx * (1 - scale) + dx], [0, scale, cy * (1 - scale) + dy]], np.float32)
+        return cv2.warpAffine(frame_map, mat, (w, h), flags=cv2.INTER_LANCZOS4,
+                              borderMode=cv2.BORDER_CONSTANT, borderValue=0)
 
     @staticmethod
     def composite(bg: np.ndarray, m: np.ndarray, overlay: float) -> np.ndarray:
