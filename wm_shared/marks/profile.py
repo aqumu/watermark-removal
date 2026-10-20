@@ -105,25 +105,38 @@ class MarkProfile:
 
     # ── rendering ────────────────────────────────────────────────────────────
 
+    def render_frame(self, listing_id: str, style: str | None = None) -> np.ndarray:
+        """Opacity map of the full mark for an ID in its own frame (cached per ID and style)."""
+        style = style or self.default_style
+        key = (str(listing_id), style)
+        cache = self.__dict__.setdefault("_frame_cache", {})
+        if key not in cache:
+            if len(cache) > 32:
+                cache.clear()
+            m = self.logo.copy()
+            st = self.styles[style]
+            text = self.text_prefix + str(listing_id)
+            x_left = st.center_x - text_ink_width(text, st) / 2
+            cov, tx, ty = text_coverage(text, st, x_left, st.top)
+            _paste_add(m, cov * st.opacity, tx, ty)
+            cache[key] = m
+        return cache[key]
+
     def render(self, listing_id: str, dx: float = 0.0, dy: float = 0.0,
                size: tuple[int, int] | None = None, style: str | None = None) -> np.ndarray:
         """Opacity map of the full mark for an ID, with the frame origin at (dx, dy).
 
-        With size=(w, h) the canvas is w x h; otherwise it is frame-sized.
+        With size=(w, h) the canvas is w x h; otherwise it is frame-sized. Fractional
+        offsets are applied with a Lanczos shift of the frame rendering.
         """
+        frame = self.render_frame(listing_id, style)
         fw, fh = self.frame_size
         w, h = size if size is not None else (fw, fh)
         ix, iy = math.floor(dx), math.floor(dy)
         fx, fy = dx - ix, dy - iy
-        # logo: sub-pixel shift in a frame-sized buffer, then paste at the integer offset
-        logo = self.logo if (fx == 0 and fy == 0) else shift_image(self.logo, fx, fy, size=(fw + 1, fh + 1))
+        shifted = frame if (fx == 0 and fy == 0) else shift_image(frame, fx, fy, size=(fw + 1, fh + 1))
         m = np.zeros((h, w), np.float32)
-        _paste_add(m, logo, ix, iy)
-        st = self.styles[style or self.default_style]
-        text = self.text_prefix + str(listing_id)
-        x_left = st.center_x - text_ink_width(text, st) / 2 + dx
-        cov, tx, ty = text_coverage(text, st, x_left, st.top + dy)
-        _paste_add(m, cov * st.opacity, tx, ty)
+        _paste_add(m, shifted, ix, iy)
         return m
 
     @staticmethod

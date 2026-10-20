@@ -19,7 +19,7 @@ import torch.nn as nn
 
 from ...common.checkpointing import CSVLogger, _save_ckpt, _save_ckpt_to, load_checkpoint
 from ...common.training_control import TrainingPaused
-from .data import model_input
+from .features import build_input, to_unit
 from .inference import remove_mark
 from .losses import OverlayLoss
 
@@ -72,7 +72,8 @@ class OverlayTrainer:
         self.cfg = cfg
         self.profile = profile
         self.device = torch.device(cfg["device"])
-        self.model = model.to(self.device)
+        torch.backends.cudnn.benchmark = True   # fixed input size: let cuDNN pick the fastest kernels
+        self.model = model.to(self.device, memory_format=torch.channels_last)
         self.train_loader = train_loader
         self.val_loader = val_loader
         self.experiment = experiment
@@ -124,12 +125,20 @@ class OverlayTrainer:
     # ── steps ────────────────────────────────────────────────────────────────
 
     def _forward(self, batch: dict, model: nn.Module):
-        x = model_input(batch).to(self.device, non_blocking=True)
+        wm_u8 = batch["wm"].to(self.device, non_blocking=True)
+        hint = batch["hint"].to(self.device, non_blocking=True)
+        x = build_input(wm_u8, hint, self.profile.overlay, self.hint_scale)
+        x = x.contiguous(memory_format=torch.channels_last)
         wm = x[:, :3]
         with torch.autocast(self.device.type, dtype=self.amp_dtype, enabled=self.amp_dtype is not None):
             delta = model(x)
         pred = (wm - delta.float()).clamp(-1, 1)
         return pred, wm
+
+    def _targets(self, batch: dict):
+        target = to_unit(batch["target"].to(self.device, non_blocking=True))
+        region = batch["region"].to(self.device, non_blocking=True).float()
+        return target, region
 
     def _train_epoch(self, epoch: int) -> None:
         self.model.train()
@@ -138,8 +147,7 @@ class OverlayTrainer:
             lr = self._lr(self.global_step)
             for group in self.optimizer.param_groups:
                 group["lr"] = lr
-            target = batch["target"].to(self.device, non_blocking=True)
-            region = batch["region"].to(self.device, non_blocking=True)
+            target, region = self._targets(batch)
             pred, _ = self._forward(batch, self.model)
             loss, parts = self.criterion(pred, target, region)
             self.optimizer.zero_grad(set_to_none=True)
@@ -177,13 +185,12 @@ class OverlayTrainer:
         model = self._eval_model()
         model.eval()
         sums = {"psnr": 0.0, "psnr_masked": 0.0, "psnr_input_masked": 0.0, "mae_mark": 0.0,
-                "loc_err": 0.0}
+                "loc_err": 0.0, "style_ok": 0.0}
         p999 = []
         n = 0
         first = None
         for batch in self.val_loader:
-            target = batch["target"].to(self.device)
-            region = batch["region"].to(self.device)
+            target, region = self._targets(batch)
             pred, wm = self._forward(batch, model)
             b = target.shape[0]
             sums["psnr"] += float(psnr(pred, target).sum())
@@ -196,6 +203,7 @@ class OverlayTrainer:
             if sel.numel():
                 p999.append(torch.quantile(sel.flatten()[:2_000_000].float(), 0.999).item())
             sums["loc_err"] += float(batch["loc_err"].abs().sum(dim=1).sum())
+            sums["style_ok"] += float(batch["style_ok"].float().sum())
             n += b
             if first is None:
                 first = (wm[:4].cpu(), pred[:4].cpu(), target[:4].cpu())

@@ -14,6 +14,8 @@ import torch
 from wm_shared.marks import MarkProfile
 from wm_shared.marks.localize import localize
 
+from .features import build_input
+
 
 def prepare_window(rgb: np.ndarray, profile: MarkProfile, listing_id: str, hint_scale: float):
     """Returns (window origin, model input tensor 1x7xhxw, localisation (x, y, score, style))."""
@@ -26,12 +28,8 @@ def prepare_window(rgb: np.ndarray, profile: MarkProfile, listing_id: str, hint_
     ex, ey = profile.expected_origin(w, h)
     lx, ly, score, style = localize(win, profile, listing_id, prior=(ex - x0, ey - y0))
     hint = profile.render(listing_id, lx, ly, size=(ww, wh), style=style)
-    inv = np.clip(profile.invert(win.astype(np.float32), hint, profile.overlay), -32, 287)
-
-    def t(img):
-        return torch.from_numpy(np.ascontiguousarray(img, dtype=np.float32).transpose(2, 0, 1) / 127.5 - 1.0)
-
-    x = torch.cat([t(win), t(inv), torch.from_numpy(hint[None] * hint_scale)], dim=0)[None]
+    wm_u8 = torch.from_numpy(np.ascontiguousarray(win.transpose(2, 0, 1)))[None]
+    x = build_input(wm_u8, torch.from_numpy(hint)[None, None], profile.overlay, hint_scale)
     return (x0, y0), x, (lx, ly, score, style)
 
 

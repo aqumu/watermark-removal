@@ -30,7 +30,7 @@ model:
   widths: [24, 48, 64, 96]
 
 training:
-  epochs: 6
+  epochs: 12
   steps_per_epoch: 1000
   batch_size: 16
   lr: 1.0e-3

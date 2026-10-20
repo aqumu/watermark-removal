@@ -36,6 +36,14 @@ from wm_shared.experiment import ExperimentSession
 from wm_shared.marks import load_mark
 
 
+def worker_init(_):
+    # one thread per data worker: OpenCV / torch thread pools in every worker
+    # oversubscribe the CPU and make each sample several times slower
+    import cv2
+    cv2.setNumThreads(1)
+    torch.set_num_threads(1)
+
+
 def load_cfg(path: str) -> dict:
     with open(path, encoding="utf-8") as f:
         cfg = yaml.safe_load(f)
@@ -110,10 +118,10 @@ def main():
     nw = int(dc.get("num_workers", 8))
     use_cuda = cfg["device"] == "cuda"
     train_loader = DataLoader(train_ds, batch_size=bs, shuffle=False, num_workers=nw, drop_last=True,
-                              pin_memory=use_cuda, persistent_workers=nw > 0,
+                              pin_memory=use_cuda, persistent_workers=nw > 0, worker_init_fn=worker_init,
                               prefetch_factor=4 if nw > 0 else None)
     val_loader = DataLoader(val_ds, batch_size=bs, shuffle=False, num_workers=nw,
-                            pin_memory=use_cuda, persistent_workers=nw > 0)
+                            pin_memory=use_cuda, persistent_workers=nw > 0, worker_init_fn=worker_init)
 
     model = build_model(cfg)
     n_params = count_params(model)

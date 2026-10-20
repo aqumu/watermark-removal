@@ -193,29 +193,24 @@ class OverlaySynthDataset(Dataset):
             hint_id = random_listing_id(rng, len(listing_id))
         lx, ly, score, found_style = localize(wm, p, hint_id, prior=(ex - wx0, ey - wy0))
         hint = p.render(hint_id, lx, ly, size=(ww, wh), style=found_style)
-        inv = p.invert(wm.astype(np.float32), hint, p.overlay)
 
         # loss region: every 16x16 macroblock the mark touches, one block of margin
         touched = (m_true > 1e-3).astype(np.uint8)
         blocks = cv2.resize(touched, (ww // g, wh // g), interpolation=cv2.INTER_AREA) > 0
         blocks = cv2.dilate(blocks.astype(np.uint8), np.ones((3, 3), np.uint8))
-        region = cv2.resize(blocks, (ww, wh), interpolation=cv2.INTER_NEAREST).astype(np.float32)
+        region = cv2.resize(blocks, (ww, wh), interpolation=cv2.INTER_NEAREST)
 
-        def t(img):  # HxWx3 uint8/float -> 3xHxW in [-1, 1]
-            return torch.from_numpy(np.ascontiguousarray(img, dtype=np.float32).transpose(2, 0, 1) / 127.5 - 1.0)
+        def chw(img):  # HxWx3 uint8 -> 3xHxW uint8
+            return torch.from_numpy(np.ascontiguousarray(img.transpose(2, 0, 1)))
 
+        # uint8 / fp16 keeps worker -> trainer traffic small; the model input
+        # (including the inverse) is built on the GPU by features.build_input
         return {
-            "wm": t(wm),
-            "inv": t(np.clip(inv, -32, 287)),
-            "hint": torch.from_numpy(hint[None] * self.cfg.get("hint_scale", 8.0)),
-            "target": t(clean),
+            "wm": chw(wm),
+            "hint": torch.from_numpy(hint[None].astype(np.float16)),
+            "target": chw(clean),
             "region": torch.from_numpy(region[None]),
-            "m_true": torch.from_numpy(m_true[None].astype(np.float32)),
             "loc_err": torch.tensor([lx - tx, ly - ty], dtype=torch.float32),
             "loc_score": torch.tensor(score, dtype=torch.float32),
             "style_ok": torch.tensor(found_style == style),
         }
-
-
-def model_input(batch: dict) -> torch.Tensor:
-    return torch.cat([batch["wm"], batch["inv"], batch["hint"]], dim=1)
