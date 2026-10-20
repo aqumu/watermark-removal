@@ -2,7 +2,6 @@ watermark_profile: ../../configs/profiles/default.yaml
 
 dataset:
   root: "../data_gen/dataset"
-  preprocessed_store_dir: "../data_gen/preprocessed_store"
   image_width: 512
   image_height: 256
   train_split: 0.9
@@ -15,6 +14,7 @@ model:
   base_channels: 32
   depth: 4
   use_checkpoint: true
+  mask_input: true
 
 training:
   epochs: 50

@@ -1,4 +1,4 @@
-"""
+﻿"""
 Trainer
 -------
 Handles the full train / validate loop with:
@@ -19,20 +19,13 @@ import cv2
 import numpy as np
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 from torch.utils.data import DataLoader
 
 from ...common.checkpointing import CSVLogger, _save_ckpt, _save_ckpt_to, load_checkpoint
 from ...common.metrics import psnr
-from ...common.restoration import (
-    blend_back,
-    build_store_signature,
-    get_store_root,
-    load_or_build_preprocessed_sample,
-    prepare_roi_input,
-)
-from ...common.training_control import TrainingPaused, clear_pause_request, pause_requested
-from wm_shared.preprocess import compute_gradient, dilate_mask_input
+from ...common.restoration import blend_back
+from ...common.training_control import TrainingPaused
+from wm_shared.preprocess import crop_removal_roi
 from .inference import run_model, weighted_loss_map
 from .losses import CombinedLoss
 class ModelEMA:
@@ -86,8 +79,7 @@ class Trainer:
                  resume: str | None = None,
                  load_weights: str | None = None,
                  start_epoch: int = 1,
-                 experiment=None,
-                 dashboard=None):
+                 experiment=None):
 
         self.model       = model
         self.cfg         = cfg
@@ -122,14 +114,9 @@ class Trainer:
         self.scheduler     = self._build_scheduler(tc)
         self.grad_clip     = tc.get("grad_clip", 0.0)
 
-        # GPU-side Preprocessing Buffers
         self.image_width = cfg["dataset"]["image_width"]
         self.image_height = cfg["dataset"]["image_height"]
         self.loss_mask_blur_pct = cfg["loss"].get("loss_mask_blur_pct", 0.0)
-        
-        # Sobel kernels: 1x1x3x3 filters for X and Y gradients
-        self.sobel_kx = torch.tensor([[-1, 0, 1], [-2, 0, 2], [-1, 0, 1]], dtype=torch.float32).view(1, 1, 3, 3).to(self.device)
-        self.sobel_ky = torch.tensor([[-1, -2, -1], [0, 0, 0], [1, 2, 1]], dtype=torch.float32).view(1, 1, 3, 3).to(self.device)
 
         # EMA вЂ” track smoothed weights for cleaner inference and best.pth
         ema_decay = tc.get("ema_decay", 0.0)
@@ -164,7 +151,6 @@ class Trainer:
             print(f"Loaded weights from {load_weights} (starting from epoch {self.start_epoch})")
 
         self.experiment    = experiment
-        self.dashboard     = dashboard
         # Calculate global step from restored epoch so new logs align to the timeline.
         # _global_step increments once per optimizer step (every grad_accum_steps batches),
         # so steps_per_epoch = ceil(batches / grad_accum_steps), not raw batch count.
@@ -172,9 +158,6 @@ class Trainer:
         _steps_per_epoch = math.ceil(len(self.train_loader) / _grad_accum)
         self._global_step  = (self.start_epoch - 1) * _steps_per_epoch
         self._sample_dir   = None   # set from train.py after construction
-
-    def _pause_requested(self) -> bool:
-        return pause_requested(self.run_dir)
 
     def _checkpoint_and_pause(self, epoch: int) -> None:
         checkpoint_path = _save_ckpt(
@@ -189,8 +172,7 @@ class Trainer:
         )
         if self.experiment is not None and checkpoint_path is not None:
             self.experiment.stage_artifact(checkpoint_path, category="checkpoints")
-        clear_pause_request(self.run_dir)
-        raise TrainingPaused(f"Pause requested at epoch {epoch}")
+        raise TrainingPaused(f"Interrupted at epoch {epoch}")
 
     # в”Ђв”Ђ scheduler в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
 
@@ -211,49 +193,12 @@ class Trainer:
     # в”Ђв”Ђ GPU preprocessing в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
     
     def _prepare_batch_gpu(self, batch: dict, training: bool):
-        """Move logic for Sobel/Dilation from CPU Dataloader to GPU.
-        
-        Input batch contains:
-          wm: Bx3xHxW [-1, 1]
-          target: Bx3xHxW [-1, 1]
-          mask_loss: Bx1xHxW [0, 1] (blurred)
-          mask_raw: Bx1xHxW [0, 1] (binary)
-        """
+        """Move batch tensors to GPU and return model input."""
         wm        = batch["wm"].to(self.device)
         target    = batch["target"].to(self.device)
         mask_loss = batch["mask_loss"].to(self.device)
         mask_raw  = batch["mask_raw"].to(self.device)
-        mask_input = batch.get("mask_input")
-        if mask_input is not None:
-            mask_input = mask_input.to(self.device)
-        
-        # 1. Mask input hint
-        # Precomputed by precompute_aligned_masks.py: seg → xcorr alignment → 5px dilation.
-        # Falls back to plain 5px dilation on the GT mask when cache is absent.
-        if mask_input is not None:
-            mask_hint = mask_input
-        else:
-            mask_hint = F.max_pool2d(mask_raw, kernel_size=5, stride=1, padding=2)
-
-        # 2. Sobel Gradient (Model input hint)
-        # Matches compute_gradient in image_utils.py (roughly)
-        with torch.no_grad():
-            # Grayscale: [0.299, 0.587, 0.114]
-            gray = 0.299 * wm[:, 0:1] + 0.587 * wm[:, 1:2] + 0.114 * wm[:, 2:3]
-            # Convert [-1,1] back to [0,1] for gradient math consistency
-            gray = (gray + 1.0) / 2.0
-            
-            gx = F.conv2d(gray, self.sobel_kx, padding=1)
-            gy = F.conv2d(gray, self.sobel_ky, padding=1)
-            mag = torch.sqrt(gx**2 + gy**2 + 1e-8)
-            
-            # Normalize to [0, 1] per batch
-            m_max = mag.view(mag.size(0), -1).max(dim=1)[0].view(-1, 1, 1, 1)
-            mag = mag / (m_max + 1e-8)
-            
-        # 3. Final Concatenation
-        inp = torch.cat([wm, mask_hint, mag], dim=1)  # Bx5xHxW
-        
+        inp = wm  # Bx3xHxW — blind removal, no mask/gradient input
         return inp, target, mask_loss, wm
 
     # в”Ђв”Ђ one training epoch в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
@@ -330,8 +275,8 @@ class Trainer:
                 row = {"epoch": epoch, "step": step, "global_step": self._global_step,
                        "lr": f"{lr:.2e}", "grad_norm": f"{grad_norm:.4f}", **breakdown}
                 self.train_logger.log(row)
-                if self.dashboard is not None:
-                    self.dashboard.log_train_metrics(row)
+                if self.experiment is not None:
+                    self.experiment.heartbeat(epoch=epoch, step=step, global_step=self._global_step)
                 print(f"  [epoch {epoch:3d} | step {step:4d}] "
                       f"loss={breakdown['total']:.4f}  "
                       f"l1_m={breakdown['l1_masked']:.4f}  "
@@ -344,9 +289,6 @@ class Trainer:
                       f"bd={breakdown['bg_delta']:.4f}  "
                       f"grad={grad_norm:.3f}{'*' if clipped else ''}  "
                       f"lr={lr:.2e}")
-
-            if is_step and self._pause_requested():
-                self._checkpoint_and_pause(epoch)
 
         if self.use_amp and skipped_steps > 0:
             scale_after = self.scaler.get_scale()
@@ -408,8 +350,6 @@ class Trainer:
         print(f"  val psnr={avg_psnr:.2f} dB  psnr_masked={avg_psnr_masked:.2f} dB"
               + (f"  train_psnr={train_psnr:.2f} dB" if train_psnr is not None else "")
               + ("  [EMA]" if self.ema else ""))
-        if self.dashboard is not None:
-            self.dashboard.log_val_metrics(val_row)
         if self._sample_dir is not None:
             result = self._infer_sample()
             if result is not None:
@@ -431,10 +371,6 @@ class Trainer:
     def _infer_sample(self, size: int | None = None):
         """Run inference on the fixed visualisation sample.
 
-        Matches the infer.py preprocessing pipeline exactly so the three
-        returned images correspond to the blended clean prediction at source
-        resolution, the raw model ROI output at configured resolution, and the
-        ROI weighted loss heatmap.
         Returns (blended_bgr, pred_roi_bgr, wloss_f32) or None on any failure.
         """
         if size is None:
@@ -442,52 +378,23 @@ class Trainer:
 
         model_width, model_height = size
         wm    = cv2.imread(str(self._sample_dir / "watermarked.jpg"), cv2.IMREAD_COLOR)
-        mask  = cv2.imread(str(self._sample_dir / "mask.png"),        cv2.IMREAD_GRAYSCALE)
-        if any(x is None for x in (wm, mask)):
+        clean = cv2.imread(str(self._sample_dir / "clean.png"), cv2.IMREAD_COLOR)
+        mask  = cv2.imread(str(self._sample_dir / "mask.png"), cv2.IMREAD_GRAYSCALE)
+        if any(x is None for x in (wm, clean, mask)):
             return None
 
-        ds_cfg = self.cfg["dataset"]
-        store_root = get_store_root(ds_cfg["root"], ds_cfg.get("preprocessed_store_dir"))
-        store_signature = build_store_signature(
-            image_width=model_width,
-            image_height=model_height,
-            crop_aspect_ratio=ds_cfg.get("crop_aspect_ratio", 3.54),
-            crop_margin_ratio=ds_cfg.get("crop_margin_ratio", 0.10),
-            crop_min_width_ratio=ds_cfg.get("crop_min_width_ratio", 0.50),
-            use_augmented_mask=False,
-        )
-        wm_r, clean_r, _, mask_input = load_or_build_preprocessed_sample(
-            store_root=store_root,
-            dataset_root=ds_cfg["root"],
-            sample_dir=self._sample_dir,
-            signature=store_signature,
-            image_width=model_width,
-            image_height=model_height,
-            crop_aspect_ratio=ds_cfg.get("crop_aspect_ratio", 3.54),
-            crop_margin_ratio=ds_cfg.get("crop_margin_ratio", 0.10),
-            crop_min_width_ratio=ds_cfg.get("crop_min_width_ratio", 0.50),
-            use_augmented_mask=False,
-        )
-
-        # Use the exact cached tensors that training uses so the preview heatmap
-        # reflects model progress rather than differences between two
-        # preprocessing pipelines.
-        rgb = cv2.cvtColor(wm_r, cv2.COLOR_BGR2RGB).astype(np.float32) / 127.5 - 1.0
-        rgb_t = torch.from_numpy(rgb.transpose(2, 0, 1)).unsqueeze(0)
-        mask_input_t = torch.from_numpy(mask_input.astype(np.float32)).unsqueeze(0).unsqueeze(0)
-        grad_t = compute_gradient(wm_r).unsqueeze(0)
-        inp = torch.cat([rgb_t, mask_input_t, grad_t], dim=1)
-
-        _, _, _, _, mask_binary, roi = prepare_roi_input(
-            wm,
-            mask,
-            model_width,
-            model_height,
-            dilate=False,
+        mask_f = mask.astype(np.float32) / 255.0
+        wm_r, clean_r, mask_soft_r, roi, _ = crop_removal_roi(
+            wm, clean, mask_f,
+            model_width, model_height,
             crop_aspect_ratio=self.cfg["dataset"].get("crop_aspect_ratio", 3.54),
-            crop_margin_ratio=self.cfg["dataset"].get("crop_margin_ratio", 0.10),
-            crop_min_width_ratio=self.cfg["dataset"].get("crop_min_width_ratio", 0.50),
+            margin_ratio=self.cfg["dataset"].get("crop_margin_ratio", 0.12),
+            min_width_ratio=self.cfg["dataset"].get("crop_min_width_ratio", 0.50),
         )
+
+        rgb = cv2.cvtColor(wm_r, cv2.COLOR_BGR2RGB).astype(np.float32) / 127.5 - 1.0
+        inp = torch.from_numpy(rgb.transpose(2, 0, 1)).unsqueeze(0)
+        mask_binary = (mask_soft_r > 0.5).astype(np.float32)
 
         was_training = self.model.training
         self.model.eval()
@@ -495,16 +402,13 @@ class Trainer:
         if was_training:
             self.model.train()
 
-        blend_mask = (dilate_mask_input(mask.astype(np.float32) / 255.0, image_size=max(model_width, model_height)) * 255.0).astype(np.uint8)
+        blend_mask = (np.clip(mask.astype(np.float32), 0.0, 1.0) * 255.0).astype(np.uint8)
         pred_bgr = blend_back(pred_roi_bgr, wm, blend_mask, roi, feather=9, mask_expand=0)
 
         delta_np = delta.squeeze(0).permute(1, 2, 0).cpu().numpy()
         wloss = weighted_loss_map(
-            pred_roi_bgr,
-            clean_r,
-            mask_binary,
-            self.cfg,
-            (model_width, model_height),
+            pred_roi_bgr, clean_r, mask_binary,
+            self.cfg, (model_width, model_height),
             delta=delta_np,
         )
 
@@ -513,18 +417,25 @@ class Trainer:
     # в”Ђв”Ђ main loop в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
 
     def train(self):
+        """Run the training loop. Ctrl+C saves a checkpoint and raises TrainingPaused."""
+        self._current_epoch = self.start_epoch
+        try:
+            self._train_loop()
+        except KeyboardInterrupt:
+            print(f"\nInterrupted - saving checkpoint for epoch {self._current_epoch} ...")
+            self._checkpoint_and_pause(self._current_epoch)
+
+    def _train_loop(self):
         print(f"Training for {self.epochs} epochs on {self.device}")
         print(f"  train: {len(self.train_loader.dataset)} samples  "
               f"val: {len(self.val_loader.dataset)} samples")
 
         for epoch in range(self.start_epoch, self.epochs + 1):
+            self._current_epoch = epoch
             t0 = time.time()
             progress = (epoch - 1) / max(self.epochs - 1, 1)
             self.criterion.set_progress(progress)
             avg_loss, avg_train_psnr = self._train_epoch(epoch)
-
-            if self._pause_requested():
-                self._checkpoint_and_pause(epoch)
 
             if self.scheduler:
                 with warnings.catch_warnings():

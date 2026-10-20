@@ -107,10 +107,15 @@ def crop_removal_roi(wm: np.ndarray,
                      height: int,
                      crop_aspect_ratio: float = 3.54,
                      margin_ratio: float = 0.10,
-                     min_width_ratio: float = 0.50,
-                     use_augmented_mask: bool = False) -> tuple[np.ndarray, np.ndarray, np.ndarray, dict, np.ndarray]:
-    """Extract a fixed-aspect, mask-guided ROI for removal training or inference."""
-    crop_mask = dilate_mask_input(mask, augment=use_augmented_mask, image_size=max(width, height))
+                     min_width_ratio: float = 0.50) -> tuple[np.ndarray, np.ndarray, np.ndarray, dict, np.ndarray]:
+    """Extract a fixed-aspect, mask-guided ROI for removal training or inference.
+
+    The ROI is computed directly from the provided mask, and the returned
+    model-input mask is the same mask cropped and resized to the model
+    resolution. Callers are expected to pass a soft probability mask when one
+    is available.
+    """
+    crop_mask = mask
     roi = make_fixed_aspect_crop(
         crop_mask,
         crop_aspect_ratio=crop_aspect_ratio,
@@ -129,15 +134,16 @@ def crop_removal_roi(wm: np.ndarray,
 
     wm_sq = _resize_to_shape(wm_crop, width, height, is_mask=False)
     clean_sq = _resize_to_shape(clean_crop, width, height, is_mask=False)
-    mask_sq = _resize_to_shape(mask_crop, width, height, is_mask=False).astype(np.float32)
-    crop_mask_sq = _resize_to_shape(crop_mask_crop, width, height, is_mask=False).astype(np.float32)
+    mask_sq = _resize_to_shape(mask_crop, width, height, is_mask=True).astype(np.float32)
+    crop_mask_sq = _resize_to_shape(crop_mask_crop, width, height, is_mask=True).astype(np.float32)
 
-    if mask_sq.max() > 1.0:
+    if mask_sq.max() > 1.01:
         mask_sq /= 255.0
-    if crop_mask_sq.max() > 1.0:
+    if crop_mask_sq.max() > 1.01:
         crop_mask_sq /= 255.0
 
-    return wm_sq, clean_sq, mask_sq, roi, crop_mask_sq
+    model_input = crop_mask_sq
+    return wm_sq, clean_sq, mask_sq, roi, model_input
 
 
 def crop_by_roi(image: np.ndarray,
@@ -164,37 +170,6 @@ def compute_gradient(bgr: np.ndarray) -> torch.Tensor:
     if max_val > 0:
         mag = mag / max_val
     return torch.from_numpy(mag).unsqueeze(0)
-
-
-def dilate_mask_input(mask: np.ndarray, augment: bool = False,
-                      image_size: int = 256) -> np.ndarray:
-    """Apply fixed 5px ELLIPSE dilation to produce the model's mask input hint.
-
-    If augment=True, additionally applies random scale and translation jitter
-    to simulate imperfect alignment from the segmentation pipeline.
-    """
-    binary = (mask >= 0.5).astype(np.uint8)
-    
-    if augment:
-        import random
-        # Reduced range of possible scales by 3x (+/- 0.05) and positional jitter by 2x (+/- 5%)
-        scale = random.uniform(0.95, 1.05)
-        
-        max_shift = int(image_size * 0.05)
-        tx = random.uniform(-max_shift, max_shift)
-        ty = random.uniform(-max_shift, max_shift)
-        
-        h, w = binary.shape[:2]
-        center = (w / 2, h / 2)
-        M = cv2.getRotationMatrix2D(center, 0, scale)
-        M[0, 2] += tx
-        M[1, 2] += ty
-        
-        binary = cv2.warpAffine(binary, M, (w, h), flags=cv2.INTER_NEAREST)
-
-    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
-    binary = cv2.dilate(binary, kernel, iterations=1)
-    return binary.astype(np.float32)
 
 
 def blur_mask_for_loss(mask: np.ndarray, blur_pct: float,

@@ -1,23 +1,17 @@
-import { useEffect, useState } from 'react'
 import { Activity, Settings } from 'lucide-react'
 import { Card, PanelCardContent, PanelCardHeader, PanelCardTitle } from '@/components/ui/card'
 import type { FlatEntry } from '../../types'
 import { EmptyState } from '../shared/EmptyState'
 import { ValueTile } from '../shared/ValueTile'
-import { StoreCacheBadge } from '../shared/StoreCacheBadge'
 
 export function RunSettingsPanel({
   modelOverviewEntries,
   hyperparameters,
   lossWeights,
-  storePath,
-  isRemoval,
 }: {
   modelOverviewEntries: FlatEntry[]
   hyperparameters: FlatEntry[]
   lossWeights: FlatEntry[]
-  storePath: string | null
-  isRemoval: boolean
 }) {
   return (
     <div className="space-y-4 animate-in-up">
@@ -50,11 +44,6 @@ export function RunSettingsPanel({
             </PanelCardTitle>
           </PanelCardHeader>
           <PanelCardContent>
-            {isRemoval && storePath && (
-              <div className="mb-3">
-                <StoreInfoTile storePath={storePath} />
-              </div>
-            )}
             {hyperparameters.length ? (
               <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
                 {hyperparameters.map((entry) => (
@@ -86,42 +75,6 @@ export function RunSettingsPanel({
             )}
           </PanelCardContent>
         </Card>
-      </div>
-    </div>
-  )
-}
-
-// ── Store info tile (run detail) ───────────────────────────────────────────────
-
-type CacheType = 'aligned' | 'legacy' | 'missing' | 'loading'
-
-function StoreInfoTile({ storePath }: { storePath: string }) {
-  const [cacheType, setCacheType] = useState<CacheType>('loading')
-
-  // Extract the last two path segments: signature folder + its parent name.
-  // The signature folder looks like: removal-512x256-aab487f60709
-  const folderName = storePath.replace(/\\/g, '/').split('/').filter(Boolean).at(-1) ?? storePath
-
-  useEffect(() => {
-    setCacheType('loading')
-    fetch(`/api/store-info?path=${encodeURIComponent(storePath)}`)
-      .then((r) => r.json())
-      .then((d: { cache_type: string }) => {
-        const t = d.cache_type
-        if (t === 'aligned' || t === 'legacy' || t === 'missing') setCacheType(t)
-        else setCacheType('missing')
-      })
-      .catch(() => setCacheType('missing'))
-  }, [storePath])
-
-  return (
-    <div className="flex items-center justify-between gap-3 rounded-md border border-border/30 bg-secondary/30 px-3 py-2.5">
-      <div className="min-w-0">
-        <p className="label-caps mb-1">Mask Cache</p>
-        <p className="truncate font-mono text-sm font-medium" title={storePath}>{folderName}</p>
-      </div>
-      <div className="shrink-0">
-        <StoreCacheBadge type={cacheType} />
       </div>
     </div>
   )

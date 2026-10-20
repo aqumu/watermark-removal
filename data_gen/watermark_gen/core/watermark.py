@@ -1,6 +1,6 @@
+import random
 import cv2
 import numpy as np
-from .colorspace import srgb_to_linear, linear_to_srgb
 
 def random_scale(wm, scale_range):
     scale = np.random.uniform(*scale_range)
@@ -20,6 +20,33 @@ def apply_edge_effects(alpha, config):
 
     return alpha
 
+def _sample_shadow_param(cfg, key, default, is_int=False):
+    val = cfg.get(key + "_range", cfg.get(key, None))
+    if isinstance(val, list):
+        return random.randint(*val) if is_int else random.uniform(*val)
+    return val if val is not None else default
+
+def apply_shadow(clean, alpha, config):
+    shadow_cfg = config.get("shadow", {})
+    enabled = shadow_cfg.get("enabled", False)
+    if not enabled:
+        return clean
+
+    offset = _sample_shadow_param(shadow_cfg, "offset", 2, is_int=True)
+    opacity = _sample_shadow_param(shadow_cfg, "opacity", 0.04)
+    blur = _sample_shadow_param(shadow_cfg, "blur", float(offset))
+    color = np.array(shadow_cfg.get("color", [0, 0, 0]), dtype=np.float64)
+
+    k = 2 * offset + 1
+    kernel = np.ones((k, k), np.uint8)
+    dilated = cv2.dilate(alpha, kernel)
+    if blur > 0:
+        dilated = cv2.GaussianBlur(dilated, (0, 0), blur)
+    shadow_alpha = dilated * (1 - alpha) * opacity
+
+    result = (1 - shadow_alpha[..., None]) * clean + shadow_alpha[..., None] * color
+    return np.clip(result, 0, 255).astype(np.uint8)
+
 def blend(clean, wm_rgba, config):
     h, w = clean.shape[:2]
     wm_rgb = wm_rgba[..., :3]
@@ -38,15 +65,7 @@ def blend(clean, wm_rgba, config):
                                config["alpha"]["perturbation"])
     alpha = alpha * (base_alpha + delta)
 
-    if np.random.rand() < config["blending"]["linear_prob"]:
-        clean_lin = srgb_to_linear(clean.astype(np.float32))
-        wm_lin = srgb_to_linear(wm_rgb.astype(np.float32))
-        blended = (1 - alpha[..., None]) * clean_lin + alpha[..., None] * 1.0
-        result = linear_to_srgb(blended)
-        mode = "linear"
-    else:
-        result = (1 - alpha[..., None]) * clean + alpha[..., None] * 255
-        result = np.clip(result, 0, 255).astype(np.uint8)
-        mode = "srgb"
+    result = (1 - alpha[..., None]) * clean + alpha[..., None] * 255
+    result = np.clip(result, 0, 255).astype(np.uint8)
 
-    return result, mask, mode
+    return result, mask, "srgb"

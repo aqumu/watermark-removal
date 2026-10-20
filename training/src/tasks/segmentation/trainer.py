@@ -20,7 +20,7 @@ import torch.nn.functional as F
 from torch.utils.data import DataLoader
 
 from ...common.checkpointing import CSVLogger, _save_ckpt, _save_ckpt_to, load_checkpoint
-from ...common.training_control import TrainingPaused, clear_pause_request, pause_requested
+from ...common.training_control import TrainingPaused
 
 
 # РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚
@@ -112,8 +112,7 @@ class SegTrainer:
                  train_loader: DataLoader, val_loader: DataLoader,
                  resume: str | None = None,
                  load_weights: str | None = None,
-                 experiment=None,
-                 dashboard=None):
+                 experiment=None):
 
         self.model        = model
         self.cfg          = cfg
@@ -180,12 +179,8 @@ class SegTrainer:
             print(f"Loaded weights from {load_weights} (starting fresh from epoch 1)")
 
         self.experiment   = experiment
-        self.dashboard    = dashboard
         self._global_step = 0
         self._sample_dir  = None  # set from train_seg.py after construction
-
-    def _pause_requested(self) -> bool:
-        return pause_requested(self.run_dir)
 
     def _checkpoint_and_pause(self, epoch: int) -> None:
         checkpoint_path = _save_ckpt(
@@ -199,8 +194,7 @@ class SegTrainer:
         )
         if self.experiment is not None and checkpoint_path is not None:
             self.experiment.stage_artifact(checkpoint_path, category="checkpoints")
-        clear_pause_request(self.run_dir)
-        raise TrainingPaused(f"Pause requested at epoch {epoch}")
+        raise TrainingPaused(f"Interrupted at epoch {epoch}")
 
     def _build_scheduler(self, tc: dict):
         name = tc.get("lr_scheduler", "none")
@@ -276,8 +270,8 @@ class SegTrainer:
                 row = {"epoch": epoch, "step": step, "global_step": self._global_step, "lr": f"{lr:.2e}",
                        "grad_norm": f"{grad_norm:.4f}", **breakdown}
                 self.train_logger.log(row)
-                if self.dashboard is not None:
-                    self.dashboard.log_train_metrics(row)
+                if self.experiment is not None:
+                    self.experiment.heartbeat(epoch=epoch, step=step, global_step=self._global_step)
                 print(f"  [epoch {epoch:3d} | step {step:4d}] "
                       f"loss={breakdown['total']:.4f}  "
                       f"bce={breakdown['bce']:.4f}  "
@@ -296,9 +290,6 @@ class SegTrainer:
             )
             self.optimizer.step()
             self.optimizer.zero_grad()
-
-            if self._pause_requested():
-                self._checkpoint_and_pause(epoch)
 
         return total_loss / max(step, 1)
 
@@ -323,8 +314,6 @@ class SegTrainer:
         val_row = {"epoch": epoch, "global_step": self._global_step, "iou": f"{avg_iou:.4f}"}
         self.val_logger.log(val_row)
         print(f"  val iou={avg_iou:.4f}")
-        if self.dashboard is not None:
-            self.dashboard.log_val_metrics(val_row)
         if self._sample_dir is not None:
             result = self._infer_sample()
             if result is not None:
@@ -387,16 +376,23 @@ class SegTrainer:
         return wm_r, pred_np, gt_np, loss_map
 
     def train(self):
+        """Run the training loop. Ctrl+C saves a checkpoint and raises TrainingPaused."""
+        self._current_epoch = self.start_epoch
+        try:
+            self._train_loop()
+        except KeyboardInterrupt:
+            print(f"\nInterrupted - saving checkpoint for epoch {self._current_epoch} ...")
+            self._checkpoint_and_pause(self._current_epoch)
+
+    def _train_loop(self):
         print(f"Training for {self.epochs} epochs on {self.device}")
         print(f"  train: {len(self.train_loader.dataset)} samples  "
               f"val: {len(self.val_loader.dataset)} samples")
 
         for epoch in range(self.start_epoch, self.epochs + 1):
+            self._current_epoch = epoch
             t0 = time.time()
             avg_loss = self._train_epoch(epoch)
-
-            if self._pause_requested():
-                self._checkpoint_and_pause(epoch)
 
             if self.scheduler:
                 with warnings.catch_warnings():

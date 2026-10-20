@@ -1,4 +1,4 @@
-export type RunStatus = 'running' | 'paused' | 'completed' | 'failed' | 'unknown'
+export type RunStatus = 'running' | 'paused' | 'completed' | 'failed' | 'stopped' | 'unknown'
 
 export type RunLineage = {
   start_mode: string
@@ -20,6 +20,16 @@ export type Manifest = {
   lineage?: RunLineage
   starred?: boolean
   note?: string
+  last_seen?: string | null
+  family_dir?: string
+  progress?: RunProgress
+}
+
+export type RunProgress = {
+  epoch?: number
+  step?: number
+  global_step?: number
+  epochs_total?: number
 }
 
 export type MetricRow = Record<string, string | number | boolean | null | undefined>
@@ -54,47 +64,15 @@ export type RunRecord = {
   artifacts?: ArtifactEntry[]
 }
 
-export type OrchestrationSnapshot = {
-  phase?: string
-  selected_family?: string | null
-  draft_config_path?: string | null
-  active_run_id?: string | null
-  active_checkpoint?: string | null
-  last_error?: string | null
-  metadata?: Record<string, unknown>
-}
-
-export type TemplateRecord = {
-  template_id: string
-  label: string
-  task_type: DraftTaskType
-  path: string
-  data?: Record<string, unknown>
-}
-
-export type DraftRecord = {
-  family_name: string
-  template_id: string
-  task_type: DraftTaskType
-  path: string
-  data?: Record<string, unknown>
-}
-
-export type TrainingManagerSnapshot = {
-  templates?: TemplateRecord[]
-  drafts?: DraftRecord[]
-  active_job?: Record<string, unknown> | null
-  recent_logs?: string[]
-  run_id_ready?: boolean
-}
-
 export type Snapshot = {
-  family_root?: string
-  current_run_id?: string | null
+  roots?: string[]
   runs?: RunRecord[]
-  current_run?: RunRecord | null
-  training_manager?: TrainingManagerSnapshot
-  orchestration?: OrchestrationSnapshot
+}
+
+export type LogTail = {
+  exists: boolean
+  truncated: boolean
+  text: string
 }
 
 export type TrendMetric = {
@@ -133,92 +111,8 @@ export type FlatEntry = {
 
 export type ActivePage = 'dashboard' | 'settings' | 'artifacts' | 'logs'
 
-export type DraftField = {
-  path: string[]
-  label: string
-  value: string | number | boolean | null
-  kind: 'string' | 'number' | 'boolean' | 'null'
-}
-
 export type NavButtonProps = {
   active: boolean
   icon: React.ComponentType<{ className?: string }>
   label: string
-}
-
-export type DraftTaskType = 'removal' | 'restoration' | 'segmentation'
-
-export type CheckpointRecord = {
-  run_id: string
-  project_run?: string
-  task_name?: string
-  checkpoint_name: string
-  checkpoint_path: string
-  checkpoint_url: string
-  kind?: string
-  epoch?: number | null
-  status?: string
-  family_root?: string
-  task_type?: string
-  signature?: Record<string, unknown>
-}
-
-export type StartPointSelection =
-  | { kind: 'fresh' }
-  | {
-      kind: 'checkpoint'
-      checkpoint_path: string
-      checkpoint_name: string
-      run_id: string
-      label: string
-    }
-
-export type DraftWorkspace = {
-  taskType: DraftTaskType
-  familyName: string
-  templateId: string
-  flow: 'scratch' | 'checkpoint'
-}
-
-export type LauncherSelection = { kind: 'home' } | ({ kind: 'draft' } & DraftWorkspace)
-
-export type ContinueBrowseSelection = { kind: 'families' } | { kind: 'family'; familyName: string }
-
-export type BrowsingContext = {
-  launcher: LauncherSelection
-  continueSelection: ContinueBrowseSelection
-}
-
-export type UXState =
-  | {
-      mode: 'browsing'
-      launcher: LauncherSelection
-      continueSelection: ContinueBrowseSelection
-    }
-  | {
-      mode: 'inspect'
-      runId: string
-      returnTo: BrowsingContext
-    }
-  | {
-      mode: 'active'
-      runId: string
-    }
-
-export type TemplateOption = {
-  id: string
-  label: string
-  description: string
-  taskType: DraftTaskType
-  suggestedFamilyName: string
-  data?: Record<string, unknown>
-}
-
-export type ContinueFamilySummary = {
-  familyName: string
-  taskLabel: string
-  latestStatus: RunStatus
-  latestRun: RunRecord
-  runs: RunRecord[]
-  bestMetricSummary: string
 }

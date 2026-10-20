@@ -11,31 +11,35 @@ A monorepo for training deep learning models to remove semi-transparent watermar
 
 ---
 
-## Dashboard-First Workflow
+## Training and the Run Viewer
 
-The recommended way to operate the training stack is through the dashboard shell:
-
-```bash
-python start.py
-```
-
-This starts the dashboard server against `training/runs/`, loads the latest run history if one exists, and gives you a modal-first workspace where you can:
-
-- inspect an existing run without starting training
-- create a draft config
-- start a fresh run
-- start from a compatible checkpoint
-- pause and resume the active job
-
-For a standalone inspect-only dashboard, use:
+Training is started, stopped and resumed only from the command line
+(`training/train.py`, `training/train_seg.py`). Each run writes everything it
+produces into its own folder, and a separate read-only viewer shows those files:
 
 ```bash
-python training/serve_dashboard.py --family-dir training/runs
+python view.py
 ```
 
-For the compact operator workflow reference, see [docs/README.md](docs/README.md).
+The viewer scans `runs/` and `training/runs/`, opens in the browser, and updates
+live as runs write new metrics, previews and log lines. It shows loss and PSNR/IoU
+charts, epoch previews, the resolved config, checkpoints and the training log
+for every run. It never starts, pauses or configures anything, so changing the
+training code cannot break it as long as runs keep writing the files below.
 
-Direct CLI training is still available for automation and experiments that do not need the dashboard shell.
+- **Pause:** press Ctrl+C in the training terminal. The trainer saves a checkpoint,
+  marks the run `paused` and exits. Continue with `--resume <checkpoint>`.
+- **Crashed or killed runs:** a run that says `running` but has written nothing for
+  15 minutes (`--stale-after`) is shown as `stopped`.
+- **Star / hide:** the viewer's only writes are `meta/star.json` (starred runs are
+  never pruned) and `meta/deleted.json` (hidden from the list, files are kept).
+
+The frontend is prebuilt into `training/src/dashboard/web/`. After changing it,
+rebuild with `cd training/src/dashboard/frontend && npm install && npm run build`.
+
+For the run folder layout see [docs/README.md](docs/README.md).
+
+---
 
 ## Repository Structure
 
@@ -45,9 +49,14 @@ watermark-removal/
     configs/default.yaml
     watermark.png
     watermark_gen/
+      cli/                    # CLI entry points (generate, preview)
+      core/                   # Config, colorspace, dataset, degrade, downloader, watermark
+      pipeline/               # Pipeline orchestration
+      utils/                  # Helpers (logging, random)
   configs/
     profiles/
-  wm_shared/                  # Shared preprocessing + profile/config loading
+      default.yaml            # Watermark profile template
+  wm_shared/                  # Shared config, profiles, experiment, preprocessing
   training/
     artifacts/
       checkpoints/
@@ -60,11 +69,16 @@ watermark-removal/
     infer.py
     infer_seg.py
     configs/
+      seg.yaml
+      train_256.yaml
+      train_512.yaml
     src/
-      common/                 # Plotting, checkpoints, metrics
+      common/                 # Checkpoints, metrics, run log, restoration
+      dashboard/              # Read-only run viewer (runs.py index, app.py server, frontend/)
       tasks/
-        removal/              # Removal dataset, model, losses, trainer
-        segmentation/         # Segmentation dataset, model, trainer
+        removal/              # Dataset, model, losses, trainer, inference, preprocessed store
+        segmentation/         # Dataset, model, trainer
+  view.py                     # Read-only run viewer
   setup.sh
   setup.bat
 ```
@@ -114,13 +128,13 @@ To inspect a random sample before generating the full dataset:
 wm-preview
 ```
 
-### 2. Start the Dashboard
+### 2. Open the Run Viewer (optional)
 
 ```bash
-python start.py
+python view.py
 ```
 
-Use the launcher to inspect existing runs or create a new draft workspace.
+Leave it open; new runs appear on their own.
 
 ### 3. Train the Segmentation Model
 
@@ -131,7 +145,7 @@ python train_seg.py
 
 Reads `configs/seg.yaml`. Trains a small U-Net to predict the watermark mask from a watermarked image alone. Checkpoints are saved to `artifacts/checkpoints/segmentation/` and metrics logged to `runs/segmentation/`.
 
-The legacy live plotter window opens during training. The run folder also stores tracker-neutral metadata under `meta/` and preview images under `previews/` so a future experiment manager can ingest them cleanly.
+Console output is also written to the run folder as `training.log`, next to `meta/`, `previews/` and the metric CSVs, and all of it shows up in the run viewer.
 
 To resume an interrupted run:
 
@@ -146,7 +160,9 @@ cd training
 python train.py
 ```
 
-Reads `configs/train_512.yaml`. Checkpoints are saved to `artifacts/checkpoints/removal_512/` and metrics logged to `runs/removal_512/`.
+By default reads `configs/train_256.yaml`. Checkpoints are saved to `artifacts/checkpoints/removal_256/` and metrics logged to `runs/removal_256/`.
+
+Pass `--config configs/train_512.yaml` for the wider 512×256 variant, which saves to `artifacts/checkpoints/removal_512/`.
 
 Removal training can use a mirrored deterministic preprocessing store at
 `data_gen/preprocessed_store/`. It is keyed by the current removal pipeline
@@ -156,19 +172,7 @@ namespace instead of reusing stale artifacts from older preprocessing logic.
 To resume an interrupted run:
 
 ```bash
-python train.py --resume artifacts/checkpoints/removal/epoch_0010.pth
-```
-
-To clear the current removal preprocessing store namespace before training:
-
-```bash
-python train.py --clear-preprocessed-store
-```
-
-To clear and fully regenerate it before training:
-
-```bash
-python train.py --rebuild-preprocessed-store
+python train.py --resume artifacts/checkpoints/removal_256/epoch_0050.pth
 ```
 
 Standalone maintenance entrypoints live under `training/scripts/`:
@@ -178,7 +182,7 @@ python training/scripts/rebuild_preprocessed_store.py --clear-first
 python training/scripts/cleanup_legacy_dataset_sidecars.py --dry-run
 ```
 
-The legacy live plotter window opens during training. The run folder also stores tracker-neutral metadata under `meta/`, preview images under `previews/`, and artifact references under `artifacts/`.
+The run folder also stores tracker-neutral metadata under `meta/`, preview images under `previews/`, and artifact references under `artifacts/`.
 
 ### 5. Inspect the Predicted Mask (optional)
 
@@ -199,7 +203,7 @@ With automatic mask prediction (recommended):
 ```bash
 cd training
   python infer.py \
-  --checkpoint     artifacts/checkpoints/removal/epoch_0060.pth \
+  --checkpoint     artifacts/checkpoints/removal_256/epoch_0050.pth \
   --seg-checkpoint artifacts/checkpoints/segmentation/epoch_0030.pth \
   --watermarked    input.jpg \
   --output         result.png
@@ -209,7 +213,7 @@ With a manually provided mask:
 
 ```bash
   python infer.py \
-  --checkpoint  artifacts/checkpoints/removal/epoch_0060.pth \
+  --checkpoint  artifacts/checkpoints/removal_256/epoch_0050.pth \
   --watermarked input.jpg \
   --mask        mask.png \
   --output      result.png
@@ -219,7 +223,7 @@ To generate a normalized loss heatmap during debugging, provide the clean ground
 
 ```bash
   python infer.py \
-  --checkpoint  artifacts/checkpoints/removal/epoch_0060.pth \
+  --checkpoint  artifacts/checkpoints/removal_256/epoch_0050.pth \
   --watermarked input.jpg \
   --mask        mask.png \
   --output      result.png \
@@ -236,10 +240,10 @@ To generate a normalized loss heatmap during debugging, provide the clean ground
 | Key | Default | Description |
 |-----|---------|-------------|
 | `download.num_images` | `15000` | Number of images to download |
-| `download.workers` | `8` | Parallel download threads |
+| `download.workers` | `10` | Parallel download threads |
 | `placement.width_fraction` | `[0.76, 0.82]` | Watermark width as fraction of image width |
-| `alpha.base_range` | `[0.1, 0.2]` | Watermark opacity range |
-| `degradation.jpeg_quality` | `[80, 95]` | JPEG compression quality range |
+| `alpha.base_range` | `[0.085, 0.115]` | Watermark opacity range |
+| `degradation.jpeg_quality` | `[30, 95]` | JPEG compression quality range |
 
 ### Segmentation (`training/configs/seg.yaml`)
 
@@ -249,21 +253,21 @@ To generate a normalized loss heatmap during debugging, provide the clean ground
 | `dataset.image_size` | `256` | Training image size |
 | `dataset.max_samples` | `10000` | Cap samples (set to null for all) |
 | `model.encoder` | `efficientnet-b0` | Pretrained encoder used by the segmentation U-Net |
-| `training.epochs` | `40` | Training epochs |
+| `training.epochs` | `80` | Training epochs |
 | `training.lr` | `1e-4` | Decoder / head learning rate |
 
-### Removal (`training/configs/train_512.yaml`)
+### Removal (`training/configs/train_256.yaml` / `train_512.yaml`)
 
-| Key | Default | Description |
-|-----|---------|-------------|
-| `dataset.root` | `../data_gen/dataset` | Path to generated dataset |
-| `dataset.image_width` | `512` | Removal ROI width |
-| `dataset.image_height` | `256` | Removal ROI height |
-| `dataset.max_samples` | `15000` | Cap samples (set to null for all) |
-| `training.epochs` | `400` | Training epochs |
-| `training.batch_size` | `8` | Batch size |
-| `training.lr` | `1.5e-4` | Learning rate (AdamW) |
-| `training.lr_scheduler` | `cosine_warmup` | LR schedule |
+| Key | Default (`train_256`) | Default (`train_512`) | Description |
+|-----|----------------------|----------------------|-------------|
+| `dataset.root` | `../data_gen/dataset` | `../data_gen/dataset` | Path to generated dataset |
+| `dataset.image_width` | `256` | `512` | Removal ROI width |
+| `dataset.image_height` | `128` | `256` | Removal ROI height |
+| `dataset.max_samples` | `15000` | `15000` | Cap samples (set to null for all) |
+| `training.epochs` | `50` | `50` | Training epochs |
+| `training.batch_size` | `32` | `16` | Batch size |
+| `training.lr` | `5.0e-3` | `5.0e-3` | Learning rate (AdamW) |
+| `training.lr_scheduler` | `cosine_warmup` | `cosine_warmup` | LR schedule |
 
 ---
 
@@ -356,7 +360,7 @@ Perceptual loss frequency and all term weights are configurable.
 - **Mask-guided ROI cropping for removal** — removal training and inference crop a fixed-aspect watermark region before resizing to square, keeping watermark geometry consistent across source aspect ratios.
 - **Mask augmentation for removal** — the removal model still sees imperfect mask hints during training so it stays robust to small mask errors at inference.
 - **Soft alpha masks** — dataset masks encode the watermark's feathered edges (0–255), not just binary inside/outside. The removal model explicitly learns the transition zone.
-- **Mixed blending modes** — 50% of samples are blended in linear RGB, 50% in sRGB, improving generalization.
+- **Mixed blending modes** — configurable via `blending.linear_prob` (default `0.0`, sRGB-only).
 - **Realistic degradation** — JPEG/WebP compression, downscaling, and Gaussian noise simulate real-world image handling.
 - **Resume support** — the downloader tracks failed URLs and both training scripts support `--resume`.
 

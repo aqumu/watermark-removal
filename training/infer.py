@@ -75,8 +75,8 @@ def load_seg_model(cfg: dict, ckpt_path: str, device: torch.device):
 @torch.no_grad()
 def predict_mask(seg_model, wm_bgr: np.ndarray, size: int, device: torch.device) -> np.ndarray:
     """
-    Run the segmentation model on a BGR image and return a binary uint8 mask
-    (0 / 255) at the original image resolution.
+    Run the segmentation model on a BGR image and return a raw probability mask
+    at the original image resolution.
     """
     _MEAN = np.array([0.485, 0.456, 0.406], dtype=np.float32)
     _STD = np.array([0.229, 0.224, 0.225], dtype=np.float32)
@@ -87,30 +87,27 @@ def predict_mask(seg_model, wm_bgr: np.ndarray, size: int, device: torch.device)
     inp = torch.from_numpy(rgb.transpose(2, 0, 1)).unsqueeze(0).to(device)
 
     pred = torch.sigmoid(seg_model(inp))
-    pred_np = pred.squeeze().cpu().numpy()
-    binary = (pred_np > 0.5).astype(np.uint8) * 255
-    return cv2.resize(binary, (w, h), interpolation=cv2.INTER_NEAREST)
+    pred_np = pred.squeeze().cpu().numpy().astype(np.float32)
+    return cv2.resize(pred_np, (w, h), interpolation=cv2.INTER_LINEAR)
 
 
 def _prepare_roi_input(wm: np.ndarray,
                        mask_u8: np.ndarray,
                        model_width: int,
                        model_height: int,
-                       dilate: bool = False,
                        crop_aspect_ratio: float = 3.54,
                        crop_margin_ratio: float = 0.10,
                        crop_min_width_ratio: float = 0.50,
-                       use_augmented_mask: bool = False):
+                       use_mask_input: bool = True):
     return shared_prepare_roi_input(
         wm,
         mask_u8,
         model_width,
         model_height,
-        dilate=dilate,
         crop_aspect_ratio=crop_aspect_ratio,
         crop_margin_ratio=crop_margin_ratio,
         crop_min_width_ratio=crop_min_width_ratio,
-        use_augmented_mask=use_augmented_mask,
+        use_mask_input=use_mask_input,
     )
 
 
@@ -118,10 +115,10 @@ def preprocess(wm_path: str,
                mask_path: str,
                model_width: int,
                model_height: int,
-               dilate: bool = False,
                crop_aspect_ratio: float = 3.54,
                crop_margin_ratio: float = 0.10,
-               crop_min_width_ratio: float = 0.50):
+               crop_min_width_ratio: float = 0.50,
+               use_mask_input: bool = True):
     wm = cv2.imread(wm_path, cv2.IMREAD_COLOR)
     mask = cv2.imread(mask_path, cv2.IMREAD_GRAYSCALE)
     if wm is None:
@@ -135,10 +132,10 @@ def preprocess(wm_path: str,
         mask,
         model_width,
         model_height,
-        dilate=dilate,
         crop_aspect_ratio=crop_aspect_ratio,
         crop_margin_ratio=crop_margin_ratio,
         crop_min_width_ratio=crop_min_width_ratio,
+        use_mask_input=use_mask_input,
     )
     return inp, wm, mask, orig_size, wm_r, mask_r, grad_np, mask_binary, roi
 
@@ -235,7 +232,8 @@ def save_debug_frames(out_path: str,
     base, ext = os.path.splitext(out_path)
     cv2.imwrite(f"{base}_debug_0_wm_resized{ext}", wm_r)
     cv2.imwrite(f"{base}_debug_1_mask_resized{ext}", (mask_r * 255).astype(np.uint8))
-    cv2.imwrite(f"{base}_debug_2_gradient{ext}", grad_np)
+    if grad_np is not None:
+        cv2.imwrite(f"{base}_debug_2_gradient{ext}", grad_np)
     cv2.imwrite(f"{base}_debug_3_model_raw{ext}", pred_bgr)
 
     delta_gray = np.abs(pred_bgr.astype(np.float32) - wm_r.astype(np.float32)).mean(axis=2)
@@ -330,9 +328,13 @@ def _debug_grid(model, cfg, device, n_samples: int, model_width: int, model_heig
 
         rgb = cv2.cvtColor(wm_r, cv2.COLOR_BGR2RGB).astype(np.float32) / 127.5 - 1.0
         rgb_t = torch.from_numpy(rgb.transpose(2, 0, 1)).unsqueeze(0).to(device)
-        mask_t = torch.from_numpy(mask_input).unsqueeze(0).unsqueeze(0).to(device)
-        grad_t = compute_gradient(wm_r).unsqueeze(0).to(device)
-        inp = torch.cat([rgb_t, mask_t, grad_t], dim=1)
+        use_mask = cfg.get("model", {}).get("mask_input", True)
+        if use_mask:
+            mask_t = torch.from_numpy(mask_input).unsqueeze(0).unsqueeze(0).to(device)
+            grad_t = compute_gradient(wm_r).unsqueeze(0).to(device)
+            inp = torch.cat([rgb_t, mask_t, grad_t], dim=1)
+        else:
+            inp = rgb_t
 
         with torch.no_grad():
             delta = model(inp)
@@ -400,6 +402,7 @@ def main():
     model_width = args.width or cfg["dataset"]["image_width"]
     model_height = args.height or cfg["dataset"]["image_height"]
 
+    use_mask_input = cfg.get("model", {}).get("mask_input", True)
     device_cfg = cfg.get("device", "auto")
     if device_cfg == "auto":
         device_cfg = "cuda" if torch.cuda.is_available() else "cpu"
@@ -421,10 +424,10 @@ def main():
             args.mask,
             model_width,
             model_height,
-            dilate=args.debug,
             crop_aspect_ratio=crop_aspect_ratio,
             crop_margin_ratio=crop_margin_ratio,
             crop_min_width_ratio=crop_min_width_ratio,
+            use_mask_input=use_mask_input,
         )
     else:
         seg_cfg = load_yaml_config(args.seg_config)
@@ -444,10 +447,10 @@ def main():
             orig_mask,
             model_width,
             model_height,
-            dilate=args.debug,
             crop_aspect_ratio=crop_aspect_ratio,
             crop_margin_ratio=crop_margin_ratio,
             crop_min_width_ratio=crop_min_width_ratio,
+            use_mask_input=use_mask_input,
         )
 
     pred_bgr, pred_float, delta = run(model, inp, device)
@@ -479,10 +482,13 @@ def main():
             roi=roi,
         )
 
+    blend_mask = orig_mask
+    if blend_mask.dtype != np.uint8:
+        blend_mask = (np.clip(blend_mask.astype(np.float32), 0.0, 1.0) * 255.0).astype(np.uint8)
     result = blend_back(
         pred_bgr,
         orig_wm,
-        orig_mask,
+        blend_mask,
         roi,
         feather=args.feather,
         mask_expand=args.mask_expand,

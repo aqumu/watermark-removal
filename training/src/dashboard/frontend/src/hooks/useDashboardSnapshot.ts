@@ -1,7 +1,10 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import type { Snapshot } from '../types'
 import { REFRESH_EVENTS } from '../lib/constants'
 
+// The viewer backend watches the run folders and emits an event whenever files
+// change; every event simply triggers a refetch. A slow poll covers dropped
+// connections.
 export function useDashboardSnapshot() {
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null)
   const [loading, setLoading] = useState(true)
@@ -10,73 +13,36 @@ export function useDashboardSnapshot() {
   const [liveTick, setLiveTick] = useState(Date.now())
   const [sseConnected, setSseConnected] = useState(false)
 
-  // Stable fetch function, available outside the SSE effect
-  const manualRefresh = useCallback(async () => {
+  const refresh = useCallback(async () => {
     try {
       const response = await fetch('/api/state')
-      if (!response.ok) throw new Error(`snapshot ${response.status}`)
-      const payload = (await response.json()) as Snapshot
-      setSnapshot(payload)
+      if (!response.ok) throw new Error(`state ${response.status}`)
+      setSnapshot((await response.json()) as Snapshot)
       setRefreshKey((v) => v + 1)
       setError(null)
-      setLoading(false)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load dashboard state')
+      setError(err instanceof Error ? err.message : 'Failed to load runs')
+    } finally {
       setLoading(false)
     }
   }, [])
 
-  // Track whether we have an SSE connection so the fallback poll backs off
-  const sseConnectedRef = useRef(false)
-
-  // SSE subscription + initial snapshot load
   useEffect(() => {
-    let closed = false
-
-    const loadSnapshot = async () => {
-      const response = await fetch('/api/state')
-      if (!response.ok) throw new Error(`snapshot ${response.status}`)
-      const payload = (await response.json()) as Snapshot
-      if (closed) return
-      setSnapshot(payload)
-      setRefreshKey((v) => v + 1)
-      setError(null)
-      setLoading(false)
-    }
-
-    loadSnapshot().catch((err) => {
-      if (!closed) {
-        setError(err instanceof Error ? err.message : 'Failed to load dashboard state')
-        setLoading(false)
-      }
-    })
-
+    void refresh()
     const source = new EventSource('/api/events')
-    const refresh = () => {
+    const onEvent = () => {
       setSseConnected(true)
-      sseConnectedRef.current = true
-      loadSnapshot().catch(() => {})
+      void refresh()
     }
-    for (const eventName of REFRESH_EVENTS) source.addEventListener(eventName, refresh)
-    source.onopen = () => {
-      setSseConnected(true)
-      sseConnectedRef.current = true
-      loadSnapshot().catch(() => {})
-    }
-    source.onerror = () => {
-      setSseConnected(false)
-      sseConnectedRef.current = false
-    }
+    for (const eventName of REFRESH_EVENTS) source.addEventListener(eventName, onEvent)
+    source.onerror = () => setSseConnected(false)
+    return () => source.close()
+  }, [refresh])
 
-    return () => { closed = true; source.close() }
-  }, [])
-
-  // Fallback polling: refresh every 20 s regardless of SSE, so subprocess
-  // training (which doesn't push live events) still updates the dashboard.
   useEffect(() => {
-    const timer = window.setInterval(() => { manualRefresh().catch(() => {}) }, 20_000)
+    const timer = window.setInterval(() => { void refresh() }, 30_000)
     return () => window.clearInterval(timer)
-  }, [manualRefresh])
+  }, [refresh])
 
   // Clock tick for relative timestamps
   useEffect(() => {
@@ -84,5 +50,5 @@ export function useDashboardSnapshot() {
     return () => window.clearInterval(timer)
   }, [])
 
-  return { snapshot, setSnapshot, loading, error, refreshKey, liveTick, sseConnected, manualRefresh }
+  return { snapshot, setSnapshot, loading, error, refreshKey, liveTick, sseConnected, refresh }
 }

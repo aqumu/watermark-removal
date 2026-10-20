@@ -1,4 +1,4 @@
-import { Activity, CheckCircle2, PlayCircle, Timer, XCircle } from 'lucide-react'
+import { Activity, CheckCircle2, CircleStop, PlayCircle, Timer, XCircle } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import type { RunStatus } from '../../types'
 
@@ -7,6 +7,7 @@ const STATUS_CONFIG: Record<RunStatus, { icon: typeof PlayCircle; className: str
   paused: { icon: Timer, className: 'bg-warning/10 text-warning', label: 'Paused' },
   completed: { icon: CheckCircle2, className: 'bg-success/10 text-success', label: 'Done' },
   failed: { icon: XCircle, className: 'bg-destructive/10 text-destructive', label: 'Failed' },
+  stopped: { icon: CircleStop, className: 'bg-destructive/10 text-destructive', label: 'Stopped' },
   unknown: { icon: Activity, className: 'bg-secondary text-muted-foreground', label: 'Unknown' },
 }
 

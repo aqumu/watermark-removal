@@ -2,7 +2,7 @@ import cv2
 import numpy as np
 import torch
 
-from ...common.restoration import blend_back, prepare_roi_input
+from ...common.restoration import blend_back
 from wm_shared.preprocess import (
     blur_mask_for_loss,
 )

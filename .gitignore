@@ -11,16 +11,38 @@ env/
 # Data generation — generated data (large, re-run pipeline to regenerate)
 data_gen/clean_images/
 data_gen/dataset/
+data_gen/synthetic_dataset/
+data_gen/synthetic_test/
 data_gen/data/failed_urls.txt
 data_gen/*.egg-info/
+data_gen/generate_synthetic.py
 
 # Training runs — ignore everything except the canonical example run
+/runs/
 training/runs/removal_256/
 training/runs/segmentation/
 training/runs/removal_512/*/
 !training/runs/removal_512/removal_512__20260415_220210/
 # Never commit checkpoint weights, even inside the example run
 training/runs/removal_512/removal_512__20260415_220210/artifacts/checkpoints/*.pth
+training/runs/overfit_*/
+training/runs/synthetic_test/
+training/runs/*/*/meta/control/
+training/runs/*/*/tracker/
+
+# Root-level training outputs and experiment scratch files
+training/artifacts/
+training/configs/overfit_*.yaml
+training/configs/synthetic_test.yaml
+training/diag_v*.png
+training/infer_overfit.py
+training/overfit*_results/
+training/syn_*_results/
+training/test_pipeline.py
+training/test_*_result.png
+training/v1_test/
+training/v2_test/
+training/v2_diagnostic.png
 
 # Preprocessed stores — always regenerated locally, never committed
 data_gen/preprocessed_store/

@@ -3,7 +3,6 @@ import { graphic } from 'echarts'
 import type {
   RunRecord,
   RunStatus,
-  OrchestrationSnapshot,
   MetricRow,
   ChartPoint,
   ValPoint,
@@ -12,9 +11,6 @@ import type {
   TrendMetric,
   FlatEntry,
   ModelOverview,
-  CheckpointRecord,
-  StartPointSelection,
-  ContinueFamilySummary,
 } from '../types'
 import {
   IGNORED_TERM_KEYS,
@@ -36,33 +32,28 @@ import {
 } from './format'
 
 export function normalizeStatus(value: string | undefined): RunStatus {
-  if (value === 'running' || value === 'paused' || value === 'completed' || value === 'failed') {
+  if (
+    value === 'running' || value === 'paused' || value === 'completed' ||
+    value === 'failed' || value === 'stopped'
+  ) {
     return value
   }
   return 'unknown'
 }
 
-export function resolveRunStatus(
-  run: RunRecord | undefined | null,
-  orchestration: OrchestrationSnapshot | undefined,
-): RunStatus {
-  const status = normalizeStatus(run?.manifest.status)
-  if (status === 'running') {
-    const phase = orchestration?.phase
-    const isActivePhase = phase === 'running' || phase === 'starting' || phase === 'pausing'
-    if (!isActivePhase || run?.manifest.run_id !== orchestration?.active_run_id) {
-      return 'unknown'
-    }
-  }
-  return status
+export function resolveRunStatus(run: RunRecord | undefined | null): RunStatus {
+  // The viewer backend already folds the heartbeat into manifest.status.
+  return normalizeStatus(run?.manifest.status)
 }
 
-export function compareRunsByCreatedAtDesc(left: RunRecord, right: RunRecord): number {
-  const leftTime = Date.parse(left.manifest.created_at ?? '')
-  const rightTime = Date.parse(right.manifest.created_at ?? '')
-  const safeLeft = Number.isNaN(leftTime) ? 0 : leftTime
-  const safeRight = Number.isNaN(rightTime) ? 0 : rightTime
-  return safeRight - safeLeft || right.manifest.run_id.localeCompare(left.manifest.run_id)
+export function formatProgress(run: RunRecord | null | undefined): string {
+  const progress = run?.manifest.progress
+  if (progress?.epoch !== undefined) {
+    const total = progress.epochs_total !== undefined ? `/${progress.epochs_total}` : ''
+    const step = progress.global_step ?? progress.step
+    return `Epoch ${progress.epoch}${total}${step !== undefined ? ` · step ${formatInteger(step)}` : ''}`
+  }
+  return formatStep(run)
 }
 
 export function buildTrainSeries(rows: MetricRow[]): ChartPoint[] {
@@ -146,103 +137,29 @@ export function buildRunSummary(run: RunRecord): string {
 }
 
 export function buildRunMetricSummary(run: RunRecord): string {
-  const latestVal = buildValSeries(run.val_metrics ?? []).at(-1)
-  if (latestVal?.psnrMasked !== undefined) {
-    return `Best PSNR: ${formatDecimal(latestVal.psnrMasked, 2)} dB`
+  const valSeries = buildValSeries(run.val_metrics ?? [])
+  const best = (key: 'psnrMasked' | 'psnr' | 'iou') => {
+    const values = valSeries.map((p) => p[key]).filter((v): v is number => v !== undefined)
+    return values.length > 0 ? Math.max(...values) : undefined
   }
-  if (latestVal?.psnr !== undefined) {
-    return `Best PSNR: ${formatDecimal(latestVal.psnr, 2)} dB`
+  const bestPsnrMasked = best('psnrMasked')
+  if (bestPsnrMasked !== undefined) {
+    return `Best PSNR: ${formatDecimal(bestPsnrMasked, 2)} dB`
   }
-  if (latestVal?.iou !== undefined) {
-    return `Best IoU: ${formatDecimal(latestVal.iou, 4)}`
+  const bestPsnr = best('psnr')
+  if (bestPsnr !== undefined) {
+    return `Best PSNR: ${formatDecimal(bestPsnr, 2)} dB`
   }
+  const bestIou = best('iou')
+  if (bestIou !== undefined) {
+    return `Best IoU: ${formatDecimal(bestIou, 4)}`
+  }
+  // The run list only carries the last train row, so this is the latest loss, not the best.
   const latestTrain = buildTrainSeries(run.train_metrics ?? []).at(-1)
   if (latestTrain?.total !== undefined) {
-    return `Best Loss: ${formatDecimal(latestTrain.total)}`
+    return `Loss: ${formatDecimal(latestTrain.total)}`
   }
   return 'No metrics yet'
-}
-
-export function buildFamilyMetricSummary(runs: RunRecord[]): string {
-  let bestLabel: string | null = null
-  let bestValue: number | null = null
-  let higherIsBetter = true
-
-  for (const run of runs) {
-    const latestVal = buildValSeries(run.val_metrics ?? []).at(-1)
-    if (latestVal?.psnrMasked !== undefined) {
-      if (bestValue === null || !higherIsBetter || latestVal.psnrMasked > bestValue) {
-        bestLabel = 'Best PSNR'
-        bestValue = latestVal.psnrMasked
-        higherIsBetter = true
-      }
-      continue
-    }
-    if (latestVal?.psnr !== undefined) {
-      if (bestValue === null || !higherIsBetter || latestVal.psnr > bestValue) {
-        bestLabel = 'Best PSNR'
-        bestValue = latestVal.psnr
-        higherIsBetter = true
-      }
-      continue
-    }
-    if (latestVal?.iou !== undefined) {
-      if (bestValue === null || !higherIsBetter || latestVal.iou > bestValue) {
-        bestLabel = 'Best IoU'
-        bestValue = latestVal.iou
-        higherIsBetter = true
-      }
-      continue
-    }
-
-    const latestTrain = buildTrainSeries(run.train_metrics ?? []).at(-1)
-    if (latestTrain?.total !== undefined) {
-      if (bestValue === null || higherIsBetter || latestTrain.total < bestValue) {
-        bestLabel = 'Best Loss'
-        bestValue = latestTrain.total
-        higherIsBetter = false
-      }
-    }
-  }
-
-  if (bestLabel === null || bestValue === null) {
-    return 'No metrics yet'
-  }
-  if (bestLabel === 'Best PSNR') {
-    return `${bestLabel}: ${formatDecimal(bestValue, 2)} dB`
-  }
-  if (bestLabel === 'Best IoU') {
-    return `${bestLabel}: ${formatDecimal(bestValue, 4)}`
-  }
-  return `${bestLabel}: ${formatDecimal(bestValue)}`
-}
-
-export function buildContinueFamilies(
-  runs: RunRecord[],
-  orchestration: OrchestrationSnapshot | undefined,
-): ContinueFamilySummary[] {
-  const grouped = new Map<string, RunRecord[]>()
-  for (const run of runs) {
-    const familyName = run.manifest.project_run ?? run.manifest.run_id
-    const familyRuns = grouped.get(familyName) ?? []
-    familyRuns.push(run)
-    grouped.set(familyName, familyRuns)
-  }
-
-  return [...grouped.entries()]
-    .map(([familyName, familyRuns]) => {
-      const sortedRuns = [...familyRuns].sort(compareRunsByCreatedAtDesc)
-      const latestRun = sortedRuns[0]
-      return {
-        familyName,
-        taskLabel: latestRun?.manifest.task_name ?? 'Unknown task',
-        latestStatus: resolveRunStatus(latestRun, orchestration),
-        latestRun,
-        runs: sortedRuns,
-        bestMetricSummary: buildFamilyMetricSummary(sortedRuns),
-      }
-    })
-    .sort((left, right) => compareRunsByCreatedAtDesc(left.latestRun, right.latestRun))
 }
 
 export function buildMetricCards(
@@ -352,26 +269,7 @@ export function buildHyperparameters(config: Record<string, unknown> | null): Fl
   }
   return flattenObject(config, ['training', 'dataset', 'model'])
     .filter((entry) => !entry.label.includes('Loss.Weights'))
-    .filter((entry) => entry.label !== 'Dataset.Preprocessed Store Dir')
     .slice(0, 18)
-}
-
-/** Extract the resolved preprocessed_store_dir from a config, or null if absent. */
-export function extractStorePath(config: Record<string, unknown> | null): string | null {
-  if (!config) return null
-  const dataset = config.dataset
-  if (!dataset || typeof dataset !== 'object' || Array.isArray(dataset)) return null
-  const val = (dataset as Record<string, unknown>).preprocessed_store_dir
-  return typeof val === 'string' && val.length > 0 ? val : null
-}
-
-/** Return true if this looks like a removal (not segmentation) config. */
-export function isRemovalConfig(config: Record<string, unknown> | null): boolean {
-  if (!config) return false
-  const dataset = config.dataset
-  if (!dataset || typeof dataset !== 'object' || Array.isArray(dataset)) return false
-  const d = dataset as Record<string, unknown>
-  return typeof d.image_width === 'number' && typeof d.image_height === 'number'
 }
 
 export function buildLossWeights(config: Record<string, unknown> | null, run: RunRecord | null | undefined): FlatEntry[] {
@@ -403,22 +301,6 @@ export function collectTopTermNames(rows: MetricRow[]): string[] {
   return [...counts.entries()]
     .sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0]))
     .map(([key]) => key)
-}
-
-export function buildCheckpointLabel(checkpoint: CheckpointRecord): string {
-  const parts = [
-    checkpoint.task_name,
-    checkpoint.kind === 'best' ? 'best checkpoint' : null,
-    checkpoint.epoch !== null && checkpoint.epoch !== undefined ? `epoch ${checkpoint.epoch}` : null,
-  ].filter(Boolean)
-  return parts.length ? parts.join(' • ') : 'Compatible checkpoint'
-}
-
-export function buildCheckpointLabelFromSelection(selection: StartPointSelection): string {
-  if (selection.kind === 'checkpoint') {
-    return `${selection.checkpoint_name} from ${selection.run_id}`
-  }
-  return 'Fresh start'
 }
 
 function localAverageAtStep(series: ValPoint[], step: number, key: 'psnr' | 'psnrMasked' | 'iou' | 'trainPsnr'): number | null {

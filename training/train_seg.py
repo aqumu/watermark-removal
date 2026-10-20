@@ -10,7 +10,6 @@ Usage:
 
 import argparse
 import random
-import threading
 import sys
 from pathlib import Path
 
@@ -25,7 +24,7 @@ if str(REPO_ROOT) not in sys.path:
 from src.tasks.segmentation.dataset import WatermarkSegDataset
 from src.tasks.segmentation.model import build_seg_model
 from src.tasks.removal.model import count_params
-from src.common.dashboard_runtime import maybe_start_dashboard
+from src.common.run_log import tee_console_to_run_log
 from src.common.run_context import prepare_run_context
 from src.common.training_control import TrainingPaused
 from src.tasks.segmentation.trainer import SegTrainer
@@ -104,8 +103,8 @@ def main():
         repo_root=REPO_ROOT,
         force_continue=args.force_continue,
     )
-    dashboard_runtime = maybe_start_dashboard(cfg=cfg, manifest=run_context.manifest)
-    dashboard_sink = dashboard_runtime.create_sink() if dashboard_runtime else None
+    log_path = tee_console_to_run_log(run_context.manifest.paths.run_dir)
+    print(f"Logging to {log_path}")
     set_seed(cfg["seed"])
 
     if cfg.get("device", "cpu") == "auto":
@@ -129,7 +128,7 @@ def main():
     if sample_dir:
         print(f"Visualisation sample: {sample_dir.name}")
 
-    experiment = ExperimentSession(task_name="segmentation", cfg=cfg, manifest=run_context.manifest, dashboard=dashboard_sink)
+    experiment = ExperimentSession(task_name="segmentation", cfg=cfg, manifest=run_context.manifest)
     experiment.log_model_overview(
         model_name=type(model).__name__,
         parameter_count=n_params,
@@ -150,26 +149,19 @@ def main():
         resume=args.resume,
         load_weights=args.load_weights,
         experiment=experiment,
-        dashboard=dashboard_sink,
     )
     trainer._sample_dir = sample_dir
 
-    def _train_worker(trainer):
-        try:
-            trainer.train()
-            experiment.set_status("completed")
-        except TrainingPaused:
-            experiment.set_status("paused")
-        except Exception:
-            experiment.set_status("failed")
-            import traceback
-            traceback.print_exc()
-
-    thread = threading.Thread(target=_train_worker, args=(trainer,), daemon=True)
-    thread.start()
-    thread.join()
-    if dashboard_runtime is not None:
-        dashboard_runtime.close()
+    try:
+        trainer.train()
+    except TrainingPaused:
+        experiment.set_status("paused")
+        print("Paused. Continue with --resume <checkpoint>.")
+    except BaseException:
+        experiment.set_status("failed")
+        raise
+    else:
+        experiment.set_status("completed")
 
 
 if __name__ == "__main__":

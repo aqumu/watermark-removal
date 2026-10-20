@@ -23,19 +23,13 @@ def gaussian_noise(img, std):
     return np.clip(img + noise, 0, 255).astype(np.uint8)
 
 def degrade(img, config):
-    ops = []
-    operations = []
+    operations = [
+        lambda x: jpeg_compress(x, random.randint(*config["degradation"]["jpeg_quality"])),
+        lambda x: webp_compress(x, random.randint(*config["degradation"]["webp_quality"])),
+        lambda x: resize_artifact(x, config["degradation"]["downscale_range"]),
+    ]
 
-    operations.append(lambda x: jpeg_compress(
-        x, random.randint(*config["degradation"]["jpeg_quality"])))
-    operations.append(lambda x: webp_compress(
-        x, random.randint(*config["degradation"]["webp_quality"])))
-    operations.append(lambda x: resize_artifact(
-        x, config["degradation"]["downscale_range"]))
-    operations.append(lambda x: gaussian_noise(
-        x, config["degradation"]["gaussian_noise_std"]))
-
-    k = random.randint(1, 2)  # max 2 ops: stacking 3 can pile up halos at watermark edges
+    k = random.randint(1, min(2, len(operations)))
     selected = random.sample(operations, k)
 
     for op in selected:

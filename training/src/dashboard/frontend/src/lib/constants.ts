@@ -1,18 +1,5 @@
-import type { TemplateOption } from '../types'
-
-export const REFRESH_EVENTS = [
-  'snapshot',
-  'status',
-  'model_overview',
-  'train_metrics',
-  'val_metrics',
-  'preview',
-  'artifact',
-  'run_registered',
-  'star',
-  'run_deleted',
-  'tick',
-] as const
+// Server-sent events from the viewer backend; any of them means "refetch".
+export const REFRESH_EVENTS = ['hello', 'runs_changed'] as const
 
 export const PREVIEW_TITLES: Record<string, string> = {
   blended_output: 'Blended Output',
@@ -65,48 +52,3 @@ export const IGNORED_TERM_KEYS = new Set([
 
 // Any key starting with this prefix is also ignored (e.g. weight_perceptual, weight_border, …)
 export const IGNORED_TERM_PREFIX = 'weight_'
-
-export const FALLBACK_TEMPLATES: TemplateOption[] = [
-  {
-    id: 'blank',
-    label: 'Blank config',
-    description: 'Start from scratch with an empty dashboard draft.',
-    taskType: 'removal',
-    suggestedFamilyName: 'removal_256',
-  },
-  {
-    id: 'train_restoration_512',
-    label: 'Restoration 512',
-    description: 'Template for direct clean-image restoration runs.',
-    taskType: 'restoration',
-    suggestedFamilyName: 'restoration_512',
-  },
-  {
-    id: 'train_256',
-    label: 'Removal 256',
-    description: 'Template for 256px watermark removal runs.',
-    taskType: 'removal',
-    suggestedFamilyName: 'removal_256',
-  },
-  {
-    id: 'train_512',
-    label: 'Removal 512',
-    description: 'Template for the larger removal configuration.',
-    taskType: 'removal',
-    suggestedFamilyName: 'removal_512',
-  },
-  {
-    id: 'train_512_second_stage',
-    label: 'Removal 512 second stage',
-    description: 'Template for loading a previous 512px removal checkpoint.',
-    taskType: 'removal',
-    suggestedFamilyName: 'removal_512_second_stage',
-  },
-  {
-    id: 'seg',
-    label: 'Segmentation',
-    description: 'Template for segmentation-oriented experiments.',
-    taskType: 'segmentation',
-    suggestedFamilyName: 'segmentation',
-  },
-]

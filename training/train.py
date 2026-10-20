@@ -9,7 +9,6 @@ Usage:
 
 import argparse
 import random
-import threading
 import sys
 from pathlib import Path
 
@@ -23,10 +22,10 @@ if str(REPO_ROOT) not in sys.path:
 
 from src.tasks.removal.dataset import make_splits
 from src.tasks.removal.model import build_model, count_params
-from src.common.dashboard_runtime import maybe_start_dashboard
+from src.common.run_log import tee_console_to_run_log
 from src.common.restoration import iter_sample_dirs
 from src.common.run_context import prepare_run_context
-from src.tasks.removal.store_cli import clear_store, load_removal_cfg, rebuild_store, resolve_store_context
+from src.tasks.removal.store_cli import load_removal_cfg
 from src.tasks.removal.trainer import Trainer
 from wm_shared.experiment import ExperimentSession
 from src.common.training_control import TrainingPaused
@@ -45,7 +44,6 @@ def load_cfg(path: str) -> dict:
 def make_loaders(cfg: dict):
     ds_cfg = cfg["dataset"]
     loss_cfg = cfg.get("loss", {})
-    store_ctx = resolve_store_context(cfg)
 
     tr_ds, va_ds = make_splits(
         root=ds_cfg["root"],
@@ -55,11 +53,10 @@ def make_loaders(cfg: dict):
         seed=cfg["seed"],
         loss_mask_blur_pct=loss_cfg.get("loss_mask_blur_pct", 0.0),
         max_samples=ds_cfg.get("max_samples"),
+        augment=ds_cfg.get("augment", True),
         crop_aspect_ratio=ds_cfg.get("crop_aspect_ratio", 3.54),
         crop_margin_ratio=ds_cfg.get("crop_margin_ratio", 0.10),
         crop_min_width_ratio=ds_cfg.get("crop_min_width_ratio", 0.50),
-        preprocessed_store_root=store_ctx["store_root"],
-        preprocessed_store_signature=store_ctx["signature"],
     )
 
     nw = ds_cfg["num_workers"]
@@ -93,10 +90,6 @@ def main():
                              "retraining use together with --resume or --load-weights")
     parser.add_argument("--start-epoch", type=int, default=1,
                         help="Manually override the starting epoch (useful for resuming weights with new LR).")
-    parser.add_argument("--clear-preprocessed-store", action="store_true",
-                        help="delete the current removal preprocessed store namespace before training")
-    parser.add_argument("--rebuild-preprocessed-store", action="store_true",
-                        help="delete and fully regenerate the current removal preprocessed store namespace before training")
     parser.add_argument("--force-continue", action="store_true",
                         help="Force continue in the same folder even if config changed (dangerous!).")
     args = parser.parse_args()
@@ -111,8 +104,8 @@ def main():
         repo_root=REPO_ROOT,
         force_continue=args.force_continue,
     )
-    dashboard_runtime = maybe_start_dashboard(cfg=cfg, manifest=run_context.manifest)
-    dashboard_sink = dashboard_runtime.create_sink() if dashboard_runtime else None
+    log_path = tee_console_to_run_log(run_context.manifest.paths.run_dir)
+    print(f"Logging to {log_path}")
     set_seed(cfg["seed"])
 
     if cfg.get("device", "cpu") == "auto":
@@ -129,17 +122,6 @@ def main():
     n_params = count_params(model)
     print(f"Model: {n_params:,} trainable parameters")
 
-    store_ctx = resolve_store_context(cfg)
-    print(f"Preprocessed store: {store_ctx['store_root']} [{store_ctx['signature']}]")
-
-    if args.clear_preprocessed_store or args.rebuild_preprocessed_store:
-        cleared = clear_store(cfg)
-        print(f"Cleared {cleared}")
-
-    if args.rebuild_preprocessed_store:
-        total, namespace = rebuild_store(cfg)
-        print(f"Prepared {total} preprocessed samples in {namespace}")
-
     train_loader, val_loader = make_loaders(cfg)
 
     _candidates = iter_sample_dirs(cfg["dataset"]["root"])
@@ -147,7 +129,7 @@ def main():
     if sample_dir:
         print(f"Visualisation sample: {sample_dir.name}")
 
-    experiment = ExperimentSession(task_name="removal", cfg=cfg, manifest=run_context.manifest, dashboard=dashboard_sink)
+    experiment = ExperimentSession(task_name="removal", cfg=cfg, manifest=run_context.manifest)
     experiment.log_model_overview(
         model_name=type(model).__name__,
         parameter_count=n_params,
@@ -171,7 +153,6 @@ def main():
         load_weights=args.load_weights,
         start_epoch=args.start_epoch,
         experiment=experiment,
-        dashboard=dashboard_sink,
     )
 
     trainer._sample_dir = sample_dir
@@ -184,22 +165,16 @@ def main():
         else:
             print("[WARNING] --reset-upsamplers is only supported for MaskedUNet; ignoring")
 
-    def _train_worker(trainer):
-        try:
-            trainer.train()
-            experiment.set_status("completed")
-        except TrainingPaused:
-            experiment.set_status("paused")
-        except Exception:
-            experiment.set_status("failed")
-            import traceback
-            traceback.print_exc()
-
-    thread = threading.Thread(target=_train_worker, args=(trainer,), daemon=True)
-    thread.start()
-    thread.join()
-    if dashboard_runtime is not None:
-        dashboard_runtime.close()
+    try:
+        trainer.train()
+    except TrainingPaused:
+        experiment.set_status("paused")
+        print("Paused. Continue with --resume <checkpoint>.")
+    except BaseException:
+        experiment.set_status("failed")
+        raise
+    else:
+        experiment.set_status("completed")
 
 
 if __name__ == "__main__":

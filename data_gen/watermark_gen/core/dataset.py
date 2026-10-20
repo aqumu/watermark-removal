@@ -6,7 +6,7 @@ from pathlib import Path
 from tqdm import tqdm
 from multiprocessing import Pool
 
-from .watermark import blend
+from .watermark import blend, apply_edge_effects
 from .degrade import degrade
 from .io import save_sample
 
@@ -34,6 +34,47 @@ def process_one(args):
     y = max(0, min((h - wm_h) // 2 + jitter_y, h - wm_h))
 
     canvas = clean.copy()
+
+    # Full-image shadow composited before watermark blending so the
+    # shadow doesn't clip at the watermark-region boundary
+    shadow_cfg = config.get("shadow", {})
+    if shadow_cfg.get("enabled", False):
+        offset_range = shadow_cfg.get("offset_range", shadow_cfg.get("offset", None))
+        if isinstance(offset_range, list):
+            offset = random.randint(*offset_range)
+        else:
+            offset = offset_range if offset_range is not None else 2
+
+        opacity_range = shadow_cfg.get("opacity_range", shadow_cfg.get("opacity", None))
+        if isinstance(opacity_range, list):
+            opacity = random.uniform(*opacity_range)
+        else:
+            opacity = opacity_range if opacity_range is not None else 0.04
+
+        blur_range = shadow_cfg.get("blur_range", shadow_cfg.get("blur", None))
+        if isinstance(blur_range, list):
+            blur = random.uniform(*blur_range)
+        else:
+            blur = blur_range if blur_range is not None else float(offset)
+
+        color = np.array(shadow_cfg.get("color", [0, 0, 0]), dtype=np.float64)
+
+        wm_alpha = wm_scaled[..., 3] / 255.0
+        feathered = apply_edge_effects(wm_alpha, config)
+
+        full_alpha = np.zeros((h, w), dtype=np.float64)
+        full_alpha[y:y+wm_h, x:x+wm_w] = feathered
+
+        k = 2 * offset + 1
+        kernel = np.ones((k, k), np.uint8)
+        dilated = cv2.dilate(full_alpha, kernel)
+        if blur > 0:
+            dilated = cv2.GaussianBlur(dilated, (0, 0), blur)
+        shadow_alpha = dilated * (1 - full_alpha) * opacity
+
+        canvas = (1 - shadow_alpha[..., None]) * canvas.astype(np.float64) + shadow_alpha[..., None] * color
+        canvas = np.clip(canvas, 0, 255).astype(np.uint8)
+
     region = canvas[y:y+wm_h, x:x+wm_w]
 
     blended, mask, mode = blend(region, wm_scaled, config)

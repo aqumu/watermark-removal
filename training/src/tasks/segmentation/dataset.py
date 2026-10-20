@@ -28,8 +28,8 @@ def _augment(img: np.ndarray, mask: np.ndarray):
         img  = cv2.flip(img,  0)
         mask = cv2.flip(mask, 0)
     if random.random() < 0.5:
-        alpha = random.uniform(0.85, 1.15)
-        beta  = random.uniform(-15, 15)
+        alpha = random.uniform(0.92, 1.08)
+        beta  = random.uniform(-8, 8)
         img = cv2.convertScaleAbs(img, alpha=alpha, beta=beta)
     return img, mask
 

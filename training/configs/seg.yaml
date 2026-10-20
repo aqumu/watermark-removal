@@ -11,20 +11,20 @@ model:
   encoder: efficientnet-b0 # pretrained ImageNet encoder — distinguishes logos from textures
 
 training:
-  epochs: 40
+  epochs: 80
   batch_size: 4
   lr: 1.0e-4         # decoder / head LR (randomly initialised)
   encoder_lr: 1.0e-5 # encoder LR — 10× lower to protect pretrained ImageNet weights
-  lr_scheduler: cosine
+  lr_scheduler: step
   weight_decay: 1.0e-4
-  pos_weight: 15.0   # pretrained features resist collapse; 30 was compensation for the weak custom model
+  pos_weight: 3.0    # EfficientNet backbone is strong; no need for extreme positive weighting
   focal_gamma: 2.0   # focal loss gamma — higher = more focus on hard pixels (0 = disabled)
   loss_weights:
-    bce: 0.5         # pretrained features make BCE gradients meaningful — raise it
-    focal: 0.5       # same — focal is effective now
-    l1: 0.1
-    ms: 0.25         # pretrained model won't hollow-predict; less critical
-    dice: 0.5        # still useful for overlap, but no longer needs to carry everything
+    bce: 0.25        # reduced — less reliance on BCE now that L1/ms drive interior fill
+    focal: 0.25      # reduced — edges are already handled
+    l1: 1.0          # increased — directly pulls sigmoid outputs toward target values for solid fills
+    ms: 1.0          # increased — penalises hollow/outline-only predictions at coarse scales
+    dice: 0.5        # still useful for overlap
   grad_accum_steps: 1
   grad_clip: 2.0     # pretrained encoder produces smaller, more stable gradients
   val_every: 1

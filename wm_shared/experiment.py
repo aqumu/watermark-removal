@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 import json
+import os
 import shutil
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 import cv2
@@ -14,6 +15,13 @@ from .run_manifest import RunManifest, save_latest_pointer
 
 def _now_stamp() -> str:
     return datetime.now().strftime("%Y%m%d_%H%M%S")
+
+
+def _utc_now_iso() -> str:
+    return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+
+
+STATUS_FILENAME = "status.json"
 
 
 def _ensure_jsonable(value):
@@ -39,15 +47,17 @@ class ExperimentSession:
     """
     Tracker-neutral run metadata and artifact staging.
 
-    The training code writes into this structure today; later, a ClearML adapter
-    can mirror the same events without another trainer refactor.
+    Everything a run produces is a file under its run folder; the run viewer
+    only reads these files and never talks to the training process.
+    meta/status.json is the live part: status plus a heartbeat that the trainer
+    refreshes every time it logs a metrics row.
     """
 
-    def __init__(self, task_name: str, cfg: dict, manifest: RunManifest | None = None, dashboard=None):
+    def __init__(self, task_name: str, cfg: dict, manifest: RunManifest | None = None):
         logging_cfg = cfg["logging"]
         self.task_name = task_name
         self.manifest = manifest
-        self.dashboard = dashboard
+        self._progress: dict = {}
         self.run_dir = Path(logging_cfg["dir"])
         if manifest is not None:
             self.run_dir = manifest.paths.run_dir
@@ -77,6 +87,8 @@ class ExperimentSession:
 
         self.session_id = _now_stamp()
         self._write_run_manifest(cfg)
+        self._status = "running"
+        self._write_status()
 
     def _write_run_manifest(self, cfg: dict) -> None:
         if self.manifest is not None:
@@ -102,12 +114,33 @@ class ExperimentSession:
             yaml.safe_dump(_ensure_jsonable(cfg), f, sort_keys=False, allow_unicode=False)
 
     def set_status(self, status: str) -> None:
+        self._status = status
+        self._write_status()
         if self.manifest is None:
             return
         self.manifest.set_status(status)
         save_latest_pointer(self.manifest)
-        if self.dashboard is not None:
-            self.dashboard.set_status(status)
+
+    def heartbeat(self, *, epoch: int, step: int | None = None, global_step: int | None = None) -> None:
+        self._progress = {"epoch": epoch, "step": step, "global_step": global_step}
+        self._write_status()
+
+    def _write_status(self) -> None:
+        payload = {
+            "status": self._status,
+            **self._progress,
+            "pid": os.getpid(),
+            "updated_at": _utc_now_iso(),
+        }
+        target = self.paths.meta_dir / STATUS_FILENAME
+        tmp = target.with_name(target.name + ".tmp")
+        try:
+            tmp.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+            os.replace(tmp, target)
+        except OSError:
+            # Best effort: on Windows the replace can fail while the viewer has
+            # the file open. The next heartbeat a few steps later will land.
+            pass
 
     def log_model_overview(
         self,
@@ -129,19 +162,12 @@ class ExperimentSession:
             json.dumps(overview, indent=2),
             encoding="utf-8",
         )
-        if self.dashboard is not None:
-            self.dashboard.log_model_overview(overview)
 
     def log_preview_set(self, step_or_epoch: int, name_to_image: dict[str, object]) -> None:
         target_dir = self.paths.preview_dir / f"{int(step_or_epoch):06d}"
         target_dir.mkdir(parents=True, exist_ok=True)
-        written = {}
         for name, image in name_to_image.items():
-            out = target_dir / f"{name}.png"
-            self._write_image(out, image)
-            written[name] = out
-        if self.dashboard is not None:
-            self.dashboard.log_preview(step_or_epoch, written)
+            self._write_image(target_dir / f"{name}.png", image)
 
     def stage_artifact(
         self,
@@ -159,8 +185,6 @@ class ExperimentSession:
             target = target_dir / label
             if source_path.resolve() != target.resolve():
                 shutil.copy2(source_path, target)
-            if self.dashboard is not None:
-                self.dashboard.log_artifact(category=category, path=target, name=label)
             return target
 
         ref_path = target_dir / f"{label}.json"
