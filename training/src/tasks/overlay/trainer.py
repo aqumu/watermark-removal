@@ -113,6 +113,8 @@ class OverlayTrainer:
         elif load_weights:
             ckpt = torch.load(load_weights, map_location="cpu", weights_only=True)
             self.model.load_state_dict(ckpt["model"])
+            if self.ema is not None:   # start the average from the loaded weights, not the init
+                self.ema = EMA(self.model, self.ema.decay)
             print(f"Loaded weights from {load_weights}")
         self.global_step = (self.start_epoch - 1) * self.steps_per_epoch
 
