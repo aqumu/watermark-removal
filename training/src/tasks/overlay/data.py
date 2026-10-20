@@ -183,7 +183,23 @@ class OverlaySynthDataset(Dataset):
         style = rng.choices(names, [p.styles[n].prob for n in names])[0]
         bg = self._background_region(rng, rw, rh).astype(np.float32)
         m_true, overlay = self._true_mark(rng, listing_id, style, tx + g, ty + g, (rw, rh))
-        stamped = np.clip(np.rint(p.composite(bg, m_true, overlay)), 0, 255).astype(np.uint8)
+        base = bg
+        if rng.random() < self.cfg.get("double_mark_prob", 0.0):
+            # a photo re-used from another listing keeps that listing's mark and gets a second
+            # one; only the listing's own mark is hinted, but both must go
+            jx, jy = p.jitter["x"], p.jitter["y"]
+            while True:
+                dx = rng.uniform(*jx) - rng.uniform(*jx)
+                dy = rng.uniform(*jy) - rng.uniform(*jy)
+                if abs(dx) > 3 or abs(dy) > 3:
+                    break
+            other_style = rng.choices(names, [p.styles[n].prob for n in names])[0]
+            m_other, overlay_other = self._true_mark(rng, random_listing_id(rng, len(listing_id)), other_style,
+                                                     tx + g + dx, ty + g + dy, (rw, rh))
+            base = p.composite(bg, m_other, overlay_other)
+        stamped = np.clip(np.rint(p.composite(base, m_true, overlay)), 0, 255).astype(np.uint8)
+        if base is not bg:
+            m_true = np.clip(m_true + m_other, 0, 1)   # loss region and ghost term cover both marks
 
         q = self._quality(rng)
         wm = jpeg_roundtrip(stamped, q)[g:g + wh, g:g + ww]

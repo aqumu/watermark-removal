@@ -4,14 +4,14 @@
   270,
   150
  ],
- "overlay": 234.0,
+ "overlay": 248.0,
  "text": {
   "prefix": "ID ",
   "styles": {
    "bold": {
     "font": "fonts/DejaVuSans-Bold.ttf",
     "size": 24.25,
-    "opacity": 0.1356,
+    "opacity": 0.1267,
     "center_x": 158.9,
     "top": 103.4,
     "prob": 0.8156108597285068
@@ -19,7 +19,7 @@
    "regular": {
     "font": "fonts/DejaVuSans.ttf",
     "size": 23.625,
-    "opacity": 0.1356,
+    "opacity": 0.1267,
     "center_x": 159.0,
     "top": 103.25,
     "prob": 0.18438914027149322

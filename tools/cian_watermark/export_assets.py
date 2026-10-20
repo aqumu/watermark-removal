@@ -103,7 +103,10 @@ def anchor_fit(positions: list[dict]) -> tuple[dict, dict]:
 
 if __name__ == "__main__":
     ASSET_DIR.mkdir(parents=True, exist_ok=True)
-    logo = clean_logo(np.load(OUT_DIR / "m_jpeg.npy"))
+    # overlay grey and opacity fitted jointly on ~700 registered JPEGs (stack.estimate with a free
+    # overlay level); c = 234 from the first WebP samples left a brightness-dependent mismatch
+    OVERLAY = 248.0
+    logo = clean_logo(np.load(OUT_DIR / "m_jpeg_cfree.npy"))
     np.savez_compressed(ASSET_DIR / "mark.npz", logo=logo)
     cv2.imwrite(str(ASSET_DIR / "logo_preview.png"), np.clip(logo / logo.max() * 255, 0, 255).astype(np.uint8))
     positions = json.loads((OUT_DIR / "jpeg_positions.json").read_text())
@@ -131,7 +134,7 @@ if __name__ == "__main__":
                        "centred under the logo; fixed pixel size, bottom-right anchor with jitter; "
                        "served as JPEG q80 (some q85) 4:2:0.",
         "frame": [int(logo.shape[1]), int(logo.shape[0])],
-        "overlay": 234.0,
+        "overlay": OVERLAY,
         "text": {"prefix": "ID ", "styles": styles, "id_lengths": {"9": 0.97, "8": 0.03}},
         "anchor": anchor,
         "jitter": jitter,

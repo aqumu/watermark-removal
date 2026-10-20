@@ -92,6 +92,7 @@ class OverlayTrainer:
                                            betas=(0.9, 0.99))
         self.amp_dtype = torch.bfloat16 if tc.get("amp", True) and self.device.type == "cuda" else None
         self.criterion = OverlayLoss(cfg)
+        self.criterion.overlay = profile.overlay   # the ghost term measures the mark against the profile's overlay
         self.ema = EMA(self.model, float(tc.get("ema_decay", 0.999))) if tc.get("ema_decay", 0) > 0 else None
         self.hint_scale = float(cfg["data"].get("hint_scale", 8.0))
         self.teacher, self.w_distill = self._load_teacher(cfg.get("distill"))

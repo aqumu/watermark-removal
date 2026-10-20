@@ -33,7 +33,7 @@ class OverlayLoss(nn.Module):
         self.w_pixel = float(lc.get("pixel", 1.0))
         self.w_grad = float(lc.get("grad", 1.0))
         self.w_ghost = float(lc.get("ghost", 0.0))
-        self.overlay = float(cfg.get("overlay", 234.0))
+        self.overlay = 234.0   # set from the mark profile by the trainer
         self.eps = 1e-3
 
     @staticmethod
