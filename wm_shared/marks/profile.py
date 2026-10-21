@@ -18,6 +18,8 @@ Measured on real marks against synthetic ones (tools/cian_watermark/fit_halo.py)
   text    the real text line is bolder than the font rendering: an opacity gain
           and an outer glow of the white layer, glow * max(blur_sigma(t) - t, 0).
           mark.json "edge": {"text": {"gain": g, "glow": [glow, sigma], "blur": sigma}}.
+          Per character the strength differs too (the "ID" prefix is fainter than
+          the digits): "char_gain": {style: {"I": g, "D": g, "digit": g}}.
   logo    opacity gain of the stacked logo raster: "edge": {"logo": {"gain": g}}.
   rim     optional inner rim, gain * max(m - blur_sigma(m), 0) ("edge": {part: {"rim": [g, s]}}).
 """
@@ -79,9 +81,26 @@ def _layout(text: str, style: TextStyle, ss: int = 8):
     return w, h, l, t, pad, font
 
 
-def text_coverage(text: str, style: TextStyle, x_left: float, y_top: float, ss: int = 8):
+def _char_gains(text: str, font, ox: int, oy: int, size: tuple[int, int], gains: dict) -> np.ndarray:
+    """Supersampled per-pixel gain: each glyph's ink gets the gain of its character
+    ("digit" for 0-9); the string itself is still drawn in one go."""
+    g = np.ones(size[::-1], np.float32)
+    for i, ch in enumerate(text):
+        gain = gains.get("digit" if ch.isdigit() else ch)
+        if gain is None or ch == " ":
+            continue
+        x = ox + font.getlength(text[:i + 1]) - font.getlength(ch)   # pen position, kerning included
+        img = Image.new("L", size, 0)
+        ImageDraw.Draw(img).text((x, oy), ch, fill=255, font=font, anchor="ls")
+        g[np.asarray(img) > 0] = gain
+    return g
+
+
+def text_coverage(text: str, style: TextStyle, x_left: float, y_top: float, ss: int = 8,
+                  gains: dict | None = None):
     """Coverage of `text` whose ink box starts at (x_left, y_top) in frame coordinates.
 
+    gains: optional opacity gain per character ({"I": g, "D": g, "digit": g}).
     Returns (coverage, ix, iy): paste coverage at integer offset (ix, iy).
     """
     w, h, l, t, pad, font = _layout(text, style, ss)
@@ -91,6 +110,8 @@ def text_coverage(text: str, style: TextStyle, x_left: float, y_top: float, ss: 
     img = Image.new("L", (w, h), 0)
     ImageDraw.Draw(img).text((ox, oy), text, fill=255, font=font, anchor="ls")
     a = np.asarray(img, np.float32) / 255.0
+    if gains:
+        a = a * _char_gains(text, font, ox, oy, (w, h), gains)
     return a.reshape(h // ss, ss, w // ss, ss).mean(axis=(1, 3)), ix, iy
 
 
@@ -118,6 +139,7 @@ class MarkProfile:
     text_blur: float = 0.0                       # sigma of the text coverage blur
     text_gain: float = 1.0                       # text opacity multiplier
     text_glow: tuple[float, float] | None = None  # (gain, sigma) outer glow of the text line
+    char_gain: dict = field(default_factory=dict)  # style -> {"I": g, "D": g, "digit": g}
     shadow: dict | None = None                   # {"distance": [...], "levels": [...], "rgb": [r, g, b]}
 
     @property
@@ -148,7 +170,8 @@ class MarkProfile:
                 st = self.styles[style]
                 text = self.text_prefix + str(listing_id)
                 x_left = st.center_x + text_offset[0] - text_ink_width(text, st) / 2
-                cov, tx, ty = text_coverage(text, st, x_left, st.top + text_offset[1])
+                cov, tx, ty = text_coverage(text, st, x_left, st.top + text_offset[1],
+                                            gains=self.char_gain.get(style))
                 cov = cov * st.opacity * self.text_gain
                 if self.text_glow and self.text_glow[0]:
                     g, sg = self.text_glow
@@ -270,5 +293,6 @@ def load_mark(name: str = "cian", assets_dir: Path = ASSETS_DIR) -> MarkProfile:
         text_blur=float(edge.get("text", {}).get("blur", 0.0)),
         text_gain=float(edge.get("text", {}).get("gain", 1.0)),
         text_glow=tuple(edge["text"]["glow"]) if "glow" in edge.get("text", {}) else None,
+        char_gain=edge.get("text", {}).get("char_gain", {}),
         shadow=meta.get("shadow"),
     )

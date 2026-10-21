@@ -31,6 +31,11 @@ profile used by training and inference). Outputs go to `out/` (gitignored).
   - logo opacity ~8% below the stacked template, edge a little crisper.
   - text line bolder than the font rendering: ~8% more opacity plus a faint
     outer glow (white) up to ~3 px.
+  - per character the text differs too (`--align text --style S --id-len 9`
+    stacks the constant "ID " prefix pixel-exactly): relative to the digits
+    the "I" is ~20% (bold) / ~35% (regular) fainter, the "D" ~10%; no
+    position offset (< 0.5 px), no extra blur. The over-drawn "I" was the
+    tick left at "ID" on real outputs, worst on regular-style marks.
   Neither was in the training data; they match the outline ghosts around
   "циан" and the tick at "ID" on real outputs. Fitted model in mark.json
   ("shadow", "edge"; `out/mark_model.json` for export_assets.py): synthetic
@@ -67,5 +72,6 @@ profile used by training and inference). Outputs go to `out/` (gitignored).
 9. `fit_halo.py`: opacity and colour of the mark across backgrounds
    (instrumental-variable fit; synthetic control, halo injection test);
    `--profile` per logo/text and edge distance, with candidate mark models
-   (`--shadow`, `--text-gain`, `--text-glow`, `--logo-gain`, `--logo-rim`).
+   (`--shadow`, `--text-gain`, `--text-glow`, `--logo-gain`, `--logo-rim`);
+   `--align text` stacks on the text line (per style / ID length).
 10. `edge_profile.py`: edge profile on flat backgrounds, real vs synthetic.

@@ -79,7 +79,11 @@ def _init(mode: str, beta: float, sigma: float, sharp: float = 0.0,
     cv2.setNumThreads(1)
     p = load_mark("cian")
     stamp = load_mark("cian")
-    for k, v in (model or {}).items():
+    model = dict(model or {})
+    # selection / alignment options: align on the text line ("text"), one style, one ID length
+    _S.update(align=model.pop("align", "frame"), only_style=model.pop("style", None),
+              id_len=model.pop("id_len", None))
+    for k, v in model.items():
         if k == "logo_gain":
             stamp.logo = stamp.logo * v
         elif k == "logo_rim":
@@ -153,14 +157,18 @@ def _crop(row: dict) -> tuple | None:
         return None
     if abs(score) < MIN_SCORE or style == "none":
         return None
+    if (_S.get("only_style") and style != _S["only_style"]) or (_S.get("id_len") and len(lid) != _S["id_len"]):
+        return None
+    # align on the frame (logo), or on the text line: then the logo moves by -offset in the crop
+    ox, oy = offset if _S.get("align") == "text" else (0.0, 0.0)
     fw, fh = p.frame_size
     cx, cy = fw / 2, fh / 2
-    mat = np.array([[scale, 0, -PAD * scale + cx * (1 - scale) + x],
-                    [0, scale, -PAD * scale + cy * (1 - scale) + y]], np.float32)
+    mat = np.array([[scale, 0, (ox - PAD) * scale + cx * (1 - scale) + x],
+                    [0, scale, (oy - PAD) * scale + cy * (1 - scale) + y]], np.float32)
     size = (fw + 2 * PAD, fh + 2 * PAD)
     crop = cv2.warpAffine(win, mat, size, flags=cv2.INTER_LANCZOS4 | cv2.WARP_INVERSE_MAP,
                           borderMode=cv2.BORDER_REPLICATE)
-    m = p.render(lid, PAD, PAD, size=size, style=style, text_offset=offset)
+    m = p.render(lid, PAD - ox, PAD - oy, size=size, style=style, text_offset=offset)
     support = cv2.dilate(glyph_mask(np.maximum(m, _S["logo"])) | (m > 0.003).astype(np.uint8),
                          np.ones((2 * HALO_REACH + 1, 2 * HALO_REACH + 1), np.uint8))
     keep = (1 - support).astype(np.float32)
@@ -314,6 +322,9 @@ def main():
     ap.add_argument("--text-glow", type=float, nargs=2, help="synth/inject: candidate text glow (gain, sigma)")
     ap.add_argument("--logo-gain", type=float, default=1.0, help="synth/inject: candidate logo opacity gain")
     ap.add_argument("--logo-rim", type=float, nargs=2, help="synth/inject: candidate logo inner rim (gain, sigma)")
+    ap.add_argument("--align", choices=("frame", "text"), default="frame", help="stack aligned on the logo or the text")
+    ap.add_argument("--style", help="only marks of this text style")
+    ap.add_argument("--id-len", type=int, help="only IDs of this length (the 'ID ' prefix then lands on the same pixels)")
     ap.add_argument("--tag", default="", help="suffix of the output name")
     args = ap.parse_args()
     model = {}
@@ -329,6 +340,12 @@ def main():
         model["logo_gain"] = args.logo_gain
     if args.logo_rim:
         model["logo_rim"] = tuple(args.logo_rim)     # applied after logo_gain (dict order)
+    if args.align != "frame":
+        model["align"] = args.align
+    if args.style:
+        model["style"] = args.style
+    if args.id_len:
+        model["id_len"] = args.id_len
     if args.profile:
         return profile_main(args.mode, args.n, args.workers, args.index, args.beta, args.sigma, model, args.tag)
 
@@ -337,7 +354,8 @@ def main():
     rows = rows[:args.n]
     chunks = [rows[i:i + 50] for i in range(0, len(rows), 50)]
     total, sums = 0, None
-    with Pool(args.workers, initializer=_init, initargs=(args.mode, args.beta, args.sigma)) as pool:
+    with Pool(args.workers, initializer=_init,
+              initargs=(args.mode, args.beta, args.sigma, 0.0, (0.0, 1.0), model)) as pool:
         for n, s in pool.imap_unordered(_work, chunks):
             total += n
             if s is not None:
@@ -353,7 +371,7 @@ def main():
     both = solve(sums.sum(0))
     halves = [solve(sums[k]) for k in range(2)]
     OUT_DIR.mkdir(exist_ok=True)
-    tag = args.mode if args.mode != "inject" else f"inject_b{args.beta}_s{args.sigma}"
+    tag = (args.mode if args.mode != "inject" else f"inject_b{args.beta}_s{args.sigma}")         + (f"_{args.tag}" if args.tag else "")
     np.savez_compressed(OUT_DIR / f"halo_{tag}.npz", alpha=both[0], a=both[1], czb=both[2],
                         alpha_h0=halves[0][0], a_h0=halves[0][1], alpha_h1=halves[1][0], a_h1=halves[1][1],
                         n=total, logo=logo)
