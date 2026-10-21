@@ -9,16 +9,23 @@ profile used by training and inference). Outputs go to `out/` (gitignored).
   q80 and 8% q85, 4:2:0, no larger than 1280×960. The CDN serves browsers a WebP
   transcode (q≈80) of the same master; that is not the service's input.
 - **Mark:** logo raster (pin, roof, "циан") plus a text line `ID <listing id>`
-  in DejaVu Sans, either **bold 24.25 px (~82%)** or **regular 23.6 px (~18%)**,
-  centred at frame x≈159. 8-digit IDs exist. Text and logo share one opacity
-  (≈0.136 in solid strokes); overlay grey ≈234: `out = bg + m·(234 − bg)`.
-- **Position:** fixed pixel size, sub-pixel placement (fractional offsets are
-  uniform). Frame origin = `(W − (0.099·W + 247.2), H − (0.0985·H + 115.1))`,
-  jitter ≈ ±12.7 px in x and ±6.7 px in y.
-- **ID ≠ listing:** about 6% of photos with a visible logo don't fit their
-  listing's ID better than a random ID (re-used photos carry the original
-  listing's ID; some of these are just hidden text). About 79% verifiably
-  match, and the rest are too faint to tell.
+  in DejaVu Sans, **bold 24.25 px (~80%)**, **regular 23.6 px (~19%)**, or no
+  text line at all (~1%), centred under the logo. 8-digit IDs exist.
+- **Blend:** close to a white overlay at ~11–13% opacity (`out = bg + m·(c − bg)`,
+  c fitted 248–259 on 700 JPEGs; the first WebP fit, 234, left a
+  brightness-dependent error). On near-white backgrounds real marks show a
+  faint 1–2 level darkening that this model does not produce (accepted).
+- **Per-photo variation:** strength ±20%, edge sharpness (mostly softer than
+  the template), **size 97–103%** (regular-style photos often ~98%), and the
+  text line's placement relative to the logo by a few px. All consistent with
+  the mark being stamped before the photo is resized.
+- **Position:** sub-pixel placement (fractional offsets are uniform). Frame
+  origin = `(W − (0.099·W + 247.2), H − (0.0985·H + 115.1))`, jitter ≈ ±12.7 px
+  in x and ±6.7 px in y.
+- **ID ≠ listing:** re-used photos can carry another listing's ID, sometimes
+  next to the new listing's own mark (double marks). Rarer than first
+  estimated: most "mismatches" were regular-style marks that the first
+  classifier missed.
 
 ## Order
 
@@ -34,4 +41,7 @@ profile used by training and inference). Outputs go to `out/` (gitignored).
    style. `fit_unexplained.py` was a check for a third style; there isn't one.
 6. `classify.py`: style frequencies and the ID-mismatch rate
    (`out/style_stats.json`).
-7. `export_assets.py`: writes `assets/marks/cian/mark.{json,npz}`.
+7. `refit_text.py`: text-line geometry and style shares on photos registered
+   on the logo alone; `fit_scale.py`: per-photo size (noisy population-wide,
+   clear on single photos).
+8. `export_assets.py`: writes `assets/marks/cian/mark.{json,npz}`.

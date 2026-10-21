@@ -41,6 +41,34 @@ For the run folder layout see [docs/README.md](docs/README.md).
 
 ---
 
+## Cian watermark (overlay removal)
+
+The Cian mark (logo + `ID <listing id>`, bottom-right, fixed pixel size) has
+its own pipeline; the Avito code below is unchanged.
+
+- **Mark profile:** `assets/marks/cian/` (template, fonts, anchor, codec), built
+  by `tools/cian_watermark/` (see its README for the findings).
+- **How it works:** a fixed 352×224 window at the mark's expected position
+  (snapped to the JPEG grid) → localiser finds logo position, size, ID-line
+  style and placement for the listing's ID → the exact mark is rendered as a
+  hint → a small U-Net predicts a correction on top of the exact inverse. No
+  detection model, no resampling; pixels outside the window are untouched.
+- **Training data:** synthesised on the fly from real Cian photos (regions away
+  from their own mark) at JPEG q80 4:2:0, with the per-photo variation measured
+  on real marks; target = the clean region after the same JPEG.
+
+```bash
+python training/train_overlay.py --config training/configs/cian_teacher_ft5.yaml   # teacher
+python training/train_overlay.py --config training/configs/cian_student_c_v2.yaml  # distilled student
+python training/eval_overlay_real.py --config training/configs/cian_student_c_v2.yaml --checkpoint best.pth --grid grid.png
+python training/export_for_service.py --checkpoint best.pth --config training/configs/cian_student_c_v2.yaml --name c_v2 --out ../watermark-service/models
+python training/remove_overlay.py --onnx model.onnx --listing-id 333768830 in.jpg out.png
+```
+
+Deployment: `watermark-service` mode `cian` (`cian.enabled: true`).
+
+---
+
 ## Repository Structure
 
 ```text
