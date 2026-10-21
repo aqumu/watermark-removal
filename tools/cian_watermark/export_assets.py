@@ -152,5 +152,9 @@ if __name__ == "__main__":
         "codec": {"jpeg_quality": {"80": 0.91, "85": 0.09}, "subsampling": "4:2:0"},
         "sizes": sizes_all,
     }
+    # logo shadow and text-line edge model fitted against synthetic marks (fit_halo.py --profile)
+    model = OUT_DIR / "mark_model.json"
+    if model.exists():
+        meta.update(json.loads(model.read_text()))
     (ASSET_DIR / "mark.json").write_text(json.dumps(meta, indent=1), encoding="utf-8")
     print(f"wrote {ASSET_DIR} ({len(sizes)} distinct sizes)")

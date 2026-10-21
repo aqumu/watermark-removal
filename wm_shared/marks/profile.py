@@ -10,6 +10,16 @@ Everything watermark-specific lives in a profile directory (assets/marks/<name>/
     fonts/     font files referenced by the text styles
 
 Opacity model (8-bit sRGB, per channel):  out = bg + m * (overlay - bg)
+
+Measured on real marks against synthetic ones (tools/cian_watermark/fit_halo.py):
+  shadow  a darkening around (and under) the logo that does not depend on the
+          background (out -= shadow, in grey levels), by distance to the logo's
+          glyph edge, with per-channel factors. mark.json "shadow".
+  text    the real text line is bolder than the font rendering: an opacity gain
+          and an outer glow of the white layer, glow * max(blur_sigma(t) - t, 0).
+          mark.json "edge": {"text": {"gain": g, "glow": [glow, sigma], "blur": sigma}}.
+  logo    opacity gain of the stacked logo raster: "edge": {"logo": {"gain": g}}.
+  rim     optional inner rim, gain * max(m - blur_sigma(m), 0) ("edge": {part: {"rim": [g, s]}}).
 """
 from __future__ import annotations
 
@@ -24,6 +34,7 @@ import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
 ASSETS_DIR = Path(__file__).resolve().parents[2] / "assets" / "marks"
+EDGE_LEVEL = 0.06      # logo opacity taken as the glyph edge (shadow distances)
 
 
 def shift_image(img: np.ndarray, dx: float, dy: float, size: tuple[int, int] | None = None) -> np.ndarray:
@@ -32,6 +43,15 @@ def shift_image(img: np.ndarray, dx: float, dy: float, size: tuple[int, int] | N
     mat = np.array([[1, 0, dx], [0, 1, dy]], np.float32)
     return cv2.warpAffine(img, mat, (w, h), flags=cv2.INTER_LANCZOS4,
                           borderMode=cv2.BORDER_CONSTANT, borderValue=0)
+
+
+def inner_rim(m: np.ndarray, sigma: float) -> np.ndarray:
+    """Brightening just inside the glyph edges: the positive part of m - blur(m) (no outer undershoot)."""
+    return np.maximum(m - cv2.GaussianBlur(m, (0, 0), sigma, borderType=cv2.BORDER_CONSTANT), 0)
+
+
+def with_rim(m: np.ndarray, rim: tuple[float, float] | None) -> np.ndarray:
+    return m if not rim or not rim[0] else m + rim[0] * inner_rim(m, rim[1])
 
 
 @lru_cache(maxsize=16)
@@ -94,6 +114,11 @@ class MarkProfile:
     grid: int                   # window origin snapping (JPEG MCU size)
     codec: dict                 # {"jpeg_quality": {q: prob}}
     sizes: list = field(default_factory=list)   # observed (W, H) image sizes to sample from
+    text_rim: tuple[float, float] | None = None  # (gain, sigma) inner rim of the text line
+    text_blur: float = 0.0                       # sigma of the text coverage blur
+    text_gain: float = 1.0                       # text opacity multiplier
+    text_glow: tuple[float, float] | None = None  # (gain, sigma) outer glow of the text line
+    shadow: dict | None = None                   # {"distance": [...], "levels": [...], "rgb": [r, g, b]}
 
     @property
     def frame_size(self) -> tuple[int, int]:
@@ -124,7 +149,14 @@ class MarkProfile:
                 text = self.text_prefix + str(listing_id)
                 x_left = st.center_x + text_offset[0] - text_ink_width(text, st) / 2
                 cov, tx, ty = text_coverage(text, st, x_left, st.top + text_offset[1])
-                _paste_add(m, cov * st.opacity, tx, ty)
+                cov = cov * st.opacity * self.text_gain
+                if self.text_glow and self.text_glow[0]:
+                    g, sg = self.text_glow
+                    cov = cov + g * np.maximum(
+                        cv2.GaussianBlur(cov, (0, 0), sg, borderType=cv2.BORDER_CONSTANT) - cov, 0)
+                if self.text_blur:
+                    cov = cv2.GaussianBlur(cov, (0, 0), self.text_blur, borderType=cv2.BORDER_CONSTANT)
+                _paste_add(m, with_rim(cov, self.text_rim), tx, ty)
             cache[key] = m
         return cache[key]
 
@@ -160,6 +192,17 @@ class MarkProfile:
         mat = np.array([[scale, 0, cx * (1 - scale) + dx], [0, scale, cy * (1 - scale) + dy]], np.float32)
         return cv2.warpAffine(frame_map, mat, (w, h), flags=cv2.INTER_LANCZOS4,
                               borderMode=cv2.BORDER_CONSTANT, borderValue=0)
+
+    def shadow_map(self, logo_placed: np.ndarray, gain: float = 1.0) -> np.ndarray:
+        """H x W x 3 darkening (grey levels) for a placed logo opacity map (render(style="none"))."""
+        h, w = logo_placed.shape
+        if not self.shadow or gain == 0:
+            return np.zeros((h, w, 3), np.float32)
+        mask = (logo_placed > EDGE_LEVEL).astype(np.uint8)
+        d = np.where(mask > 0, -cv2.distanceTransform(mask, cv2.DIST_L2, 5),
+                     cv2.distanceTransform(1 - mask, cv2.DIST_L2, 5))
+        lv = np.interp(d, self.shadow["distance"], self.shadow["levels"], right=0.0).astype(np.float32)
+        return gain * lv[..., None] * np.asarray(self.shadow["rgb"], np.float32)
 
     @staticmethod
     def composite(bg: np.ndarray, m: np.ndarray, overlay: float) -> np.ndarray:
@@ -204,12 +247,15 @@ def load_mark(name: str = "cian", assets_dir: Path = ASSETS_DIR) -> MarkProfile:
     root = Path(assets_dir) / name
     meta = json.loads((root / "mark.json").read_text(encoding="utf-8"))
     arrays = np.load(root / "mark.npz")
+    edge = meta.get("edge", {})
+    rim = {part: tuple(v["rim"]) for part, v in edge.items() if "rim" in v}
     styles = {k: TextStyle(font=str(root / v["font"]), size=float(v["size"]), opacity=float(v["opacity"]),
                            center_x=float(v["center_x"]), top=float(v["top"]), prob=float(v.get("prob", 1.0)))
               for k, v in meta["text"]["styles"].items()}
     return MarkProfile(
         name=name,
-        logo=arrays["logo"].astype(np.float32),
+        logo=with_rim(arrays["logo"].astype(np.float32) * float(edge.get("logo", {}).get("gain", 1.0)),
+                      rim.get("logo")),
         styles=styles,
         text_prefix=meta["text"].get("prefix", ""),
         id_lengths={int(k): float(v) for k, v in meta["text"].get("id_lengths", {"9": 1.0}).items()},
@@ -220,4 +266,9 @@ def load_mark(name: str = "cian", assets_dir: Path = ASSETS_DIR) -> MarkProfile:
         grid=int(meta.get("grid", 16)),
         codec=meta["codec"],
         sizes=[tuple(s) for s in meta.get("sizes", [])],
+        text_rim=rim.get("text"),
+        text_blur=float(edge.get("text", {}).get("blur", 0.0)),
+        text_gain=float(edge.get("text", {}).get("gain", 1.0)),
+        text_glow=tuple(edge["text"]["glow"]) if "glow" in edge.get("text", {}) else None,
+        shadow=meta.get("shadow"),
     )

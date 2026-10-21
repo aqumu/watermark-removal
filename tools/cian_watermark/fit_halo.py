@@ -1,6 +1,7 @@
 """Step 9: is there a dark halo around the mark, and what are its spread, colour and intensity?
 
-Result (2026-10-21): no halo on photos; see edge_profile.py and the README.
+Result (2026-10-21): no black alpha halo, but a background-independent shadow around the
+logo and a bolder text line (use --profile); see the README.
 
 Per frame pixel and colour channel, a mark of any construction composites as
 
@@ -33,6 +34,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import json
 import random
 import sys
 import zlib
@@ -65,13 +67,29 @@ def halo_map(mask: np.ndarray, beta: float, sigma: float) -> np.ndarray:
     return beta * cv2.GaussianBlur(mask.astype(np.float32), (0, 0), sigma) if beta > 0 else np.zeros(mask.shape, np.float32)
 
 
-def _init(mode: str, beta: float, sigma: float, sharp: float = 0.0) -> None:
+def inner_rim(m: np.ndarray, sigma: float) -> np.ndarray:
+    """Brightening just inside the glyph edges: the positive part of m - blur(m)."""
+    return np.maximum(m - cv2.GaussianBlur(m, (0, 0), sigma), 0)
+
+
+def _init(mode: str, beta: float, sigma: float, sharp: float = 0.0,
+          rim: tuple[float, float] = (0.0, 1.0), model: dict | None = None) -> None:
+    """model: candidate mark-model attributes for the synthetic stamp ({"shadow": ..., "text_blur": ...});
+    localisation and alignment keep the profile as loaded."""
     cv2.setNumThreads(1)
     p = load_mark("cian")
+    stamp = load_mark("cian")
+    for k, v in (model or {}).items():
+        if k == "logo_gain":
+            stamp.logo = stamp.logo * v
+        elif k == "logo_rim":
+            stamp.logo = stamp.logo + v[0] * inner_rim(stamp.logo, v[1])
+        else:
+            setattr(stamp, k, v)
     fw, fh = p.frame_size
     logo = np.zeros((fh + 2 * PAD, fw + 2 * PAD), np.float32)
     logo[PAD:PAD + fh, PAD:PAD + fw] = p.logo
-    _S.update(p=p, mode=mode, beta=beta, sigma=sigma, sharp=sharp, logo=logo)
+    _S.update(p=p, stamp=stamp, mode=mode, beta=beta, sigma=sigma, sharp=sharp, rim=rim, logo=logo)
 
 
 def _stamp(rgb: np.ndarray, lid: str, rng: random.Random) -> tuple[np.ndarray, tuple[int, int]] | None:
@@ -86,14 +104,19 @@ def _stamp(rgb: np.ndarray, lid: str, rng: random.Random) -> tuple[np.ndarray, t
     style = "bold" if rng.random() < 0.8 else "regular"
     x, y = 40 + rng.uniform(-8, 8), 40 + rng.uniform(-5, 5)
     scale = rng.uniform(0.98, 1.02)
-    m = p.render(lid, x, y, size=(ww, wh), style=style, scale=scale)
+    sp = _S["stamp"]
+    m = sp.render(lid, x, y, size=(ww, wh), style=style, scale=scale)
     if _S["sharp"]:
         m = m + _S["sharp"] * (m - cv2.GaussianBlur(m, (0, 0), 1.0))   # as in training (data.py)
+    if _S["rim"][0]:
+        m = m + _S["rim"][0] * inner_rim(m, _S["rim"][1])
     out = clean
     if _S["mode"] == "inject":
         hl = halo_map(glyph_mask(m), _S["beta"], _S["sigma"])
         out = out * (1 - hl[..., None])
     out = out + m[..., None] * (p.overlay - out)
+    if sp.shadow:
+        out = out - sp.shadow_map(sp.render(lid, x, y, size=(ww, wh), style="none", scale=scale))
     ok, enc = cv2.imencode(".jpg", np.clip(np.rint(out), 0, 255).astype(np.uint8)[..., ::-1],
                            [cv2.IMWRITE_JPEG_QUALITY, 80])
     win = cv2.imdecode(enc, cv2.IMREAD_COLOR)[..., ::-1].astype(np.float32)
@@ -217,6 +240,65 @@ def edge_profile(alpha: np.ndarray, a: np.ndarray, logo: np.ndarray, rows: slice
     return out
 
 
+
+BINS = np.arange(-6, 16)        # signed distance to the glyph edge (px) for the profile fit
+
+
+def _signed_distance(mask: np.ndarray) -> np.ndarray:
+    return np.where(mask > 0, -cv2.distanceTransform(mask, cv2.DIST_L2, 5) + 0.5,
+                    cv2.distanceTransform(1 - mask, cv2.DIST_L2, 5) - 0.5)
+
+
+def _work_profile(rows: list[dict]):
+    """Like _work, but the sums are per (part, distance bin) instead of per pixel.
+
+    The text line differs between photos (other IDs, other placement), so it can't
+    be stacked pixel by pixel; binning every photo's pixels by the distance to its
+    own rendered glyphs works for the logo and the text alike.
+    """
+    sums = np.zeros((2, 2, len(BINS), 6, 3), np.float64)     # half, part (logo/text), bin, sum, channel
+    n = 0
+    for row in rows:
+        got = _crop(row)
+        if got is None:
+            continue
+        crop, b, w, z, m, _ = got
+        d = crop - b
+        half = zlib.crc32(row["listing_id"].encode()) & 1
+        logo_mask, text_mask = glyph_mask(_S["logo"]), glyph_mask(m - _S["logo"])
+        dl, dt = _signed_distance(logo_mask), _signed_distance(text_mask)
+        for part, (own, other) in enumerate(((dl, dt), (dt, dl))):
+            closer = np.abs(own) < np.abs(other)
+            idx = np.floor(own).astype(int) - BINS[0]
+            ok = closer & (idx >= 0) & (idx < len(BINS))
+            for k in np.unique(idx[ok]):
+                sel = ok & (idx == k)
+                ww, bb, dd = w[sel], b[sel], d[sel]
+                s = sums[half, part, k]
+                s[0] += ww.sum(0)
+                s[1] += (ww * bb).sum(0)
+                s[2] += (ww * dd).sum(0)
+                s[3] += (ww * z).sum(0)
+                s[4] += (ww * z * bb).sum(0)
+                s[5] += (ww * z * dd).sum(0)
+        n += 1
+    return n, sums
+
+
+def profile_main(mode: str, n_rows: int, workers: int, index: str, beta: float, sigma: float,
+                 model: dict | None = None, tag: str = "") -> None:
+    rows = list(csv.DictReader(open(index, encoding="utf-8")))
+    random.Random(17).shuffle(rows)
+    rows = rows[:n_rows]
+    chunks = [rows[i:i + 50] for i in range(0, len(rows), 50)]
+    total, sums = 0, 0
+    with Pool(workers, initializer=_init, initargs=(mode, beta, sigma, 0.0, (0.0, 1.0), model)) as pool:
+        for n, s in pool.imap_unordered(_work_profile, chunks):
+            total, sums = total + n, sums + s
+    tag = (mode if mode != "inject" else f"inject_b{beta}_s{sigma}") + (f"_{tag}" if tag else "")
+    np.savez_compressed(OUT_DIR / f"halo_profile_{tag}.npz", sums=sums, bins=BINS, n=total)
+    print(f"{mode}: {total} aligned marks -> out/halo_profile_{tag}.npz")
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--mode", choices=("real", "synth", "inject"), default="real")
@@ -225,7 +307,30 @@ def main():
     ap.add_argument("--sigma", type=float, default=2.0)
     ap.add_argument("--workers", type=int, default=6)
     ap.add_argument("--index", default=str(REPO / "data_gen/backgrounds/cian_index.csv"))
+    ap.add_argument("--profile", action="store_true", help="fit per (logo/text, edge distance) instead of per pixel")
+    ap.add_argument("--shadow", help="synth/inject: JSON file with a candidate shadow table")
+    ap.add_argument("--text-blur", type=float, default=0.0, help="synth/inject: candidate text blur sigma")
+    ap.add_argument("--text-gain", type=float, default=1.0, help="synth/inject: candidate text opacity gain")
+    ap.add_argument("--text-glow", type=float, nargs=2, help="synth/inject: candidate text glow (gain, sigma)")
+    ap.add_argument("--logo-gain", type=float, default=1.0, help="synth/inject: candidate logo opacity gain")
+    ap.add_argument("--logo-rim", type=float, nargs=2, help="synth/inject: candidate logo inner rim (gain, sigma)")
+    ap.add_argument("--tag", default="", help="suffix of the output name")
     args = ap.parse_args()
+    model = {}
+    if args.shadow:
+        model["shadow"] = json.loads(Path(args.shadow).read_text(encoding="utf-8"))
+    if args.text_blur:
+        model["text_blur"] = args.text_blur
+    if args.text_gain != 1.0:
+        model["text_gain"] = args.text_gain
+    if args.text_glow:
+        model["text_glow"] = tuple(args.text_glow)
+    if args.logo_gain != 1.0:
+        model["logo_gain"] = args.logo_gain
+    if args.logo_rim:
+        model["logo_rim"] = tuple(args.logo_rim)     # applied after logo_gain (dict order)
+    if args.profile:
+        return profile_main(args.mode, args.n, args.workers, args.index, args.beta, args.sigma, model, args.tag)
 
     rows = list(csv.DictReader(open(args.index, encoding="utf-8")))
     random.Random(17).shuffle(rows)

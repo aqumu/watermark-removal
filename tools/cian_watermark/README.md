@@ -13,26 +13,31 @@ profile used by training and inference). Outputs go to `out/` (gitignored).
   text line at all (~1%), centred under the logo. 8-digit IDs exist.
 - **Blend:** close to a white overlay at ~11–13% opacity (`out = bg + m·(c − bg)`,
   c fitted 248–259 on 700 JPEGs; the first WebP fit, 234, left a
-  brightness-dependent error). On near-white backgrounds real marks show a
-  faint 1–2 level darkening that this model does not produce (accepted).
+  brightness-dependent error). Plus the logo shadow below.
 - **Per-photo variation:** strength ±20%, edge sharpness (mostly softer than
   the template), **size 97–103%** (regular-style photos often ~98%), and the
   text line's placement relative to the logo by a few px. All consistent with
   the mark being stamped before the photo is resized.
-- **No dark halo on photos (2026-10-21, `fit_halo.py`, `edge_profile.py`):**
-  real marks on flat backgrounds match halo-free synthetic marks outside the
-  glyph edges within ±0.5 levels on dark and mid backgrounds. The method
-  recovers an injected black halo of that size, so one would have shown. The
-  "dark ring" a plain stack shows is a measurement artefact (it appears on
-  synthetic marks too). Pure-white graphics (floor plans) do show a ~1.7 level
-  dark outline 1–4 px out that JPEG and WebP do not produce; likely the mark
-  stamped on a transparent PNG before it is flattened onto white. Graphics only.
-- **Edge profile differs from the template:** real marks are brighter just
-  inside the glyph edges (1–2 px in: about +1.2–2.4 levels on dark backgrounds,
-  scaling with the mark's contrast) with no dark undershoot outside. Training's
-  sharpness augmentation (`m + k·(m − blur(m))`) brightens the inner edge but
-  also adds an undershoot real marks don't have, and its range was mostly on
-  the soft side (k < 0) while real edges sit near k ≈ 0.5–1 inside.
+- **Shadow around the logo, bolder text (2026-10-21, `fit_halo.py --profile`):**
+  real marks compared with synthetic ones (the template stamped on clean parts
+  of the same photos, JPEG, same localisation and measurement), separately for
+  the logo and the text line, per distance to the glyph edge. Fitting
+  `out - bg = a - alpha * bg` with the crop's overall level as instrument:
+  - logo: a darkening that does not depend on the background (no extra
+    opacity): ~3.1 levels just outside the edge, 2.2 / 1.4 / 1.2 at 1–3 px,
+    ~0.9 at 4–6 px, ~0.4 out to 12 px; green ~15% stronger than red. The
+    outline on pure-white graphics is the same thing. Both halves of the
+    listings agree to 0.1 level; an injected black halo is recovered.
+  - logo opacity ~8% below the stacked template, edge a little crisper.
+  - text line bolder than the font rendering: ~8% more opacity plus a faint
+    outer glow (white) up to ~3 px.
+  Neither was in the training data; they match the outline ghosts around
+  "циан" and the tick at "ID" on real outputs. Fitted model in mark.json
+  ("shadow", "edge"; `out/mark_model.json` for export_assets.py): synthetic
+  marks then match real ones within ~0.3–0.5 levels (logo) and ~0.7–1 (text),
+  from 1.2–1.8 before. A plain stack or whole-mark profile hides this: the
+  background estimate next to a bright mark is biased (control shows a fake
+  ring), and logo (darker) and text (brighter) average out.
 - **Position:** sub-pixel placement (fractional offsets are uniform). Frame
   origin = `(W − (0.099·W + 247.2), H − (0.0985·H + 115.1))`, jitter ≈ ±12.7 px
   in x and ±6.7 px in y.
@@ -59,7 +64,8 @@ profile used by training and inference). Outputs go to `out/` (gitignored).
    on the logo alone; `fit_scale.py`: per-photo size (noisy population-wide,
    clear on single photos).
 8. `export_assets.py`: writes `assets/marks/cian/mark.{json,npz}`.
-9. `fit_halo.py`: per-pixel opacity and colour of the mark across backgrounds
-   (instrumental-variable fit; synthetic control and halo injection test).
-10. `edge_profile.py`: model-free edge profile on flat backgrounds, real vs
-   synthetic at several edge sharpness values.
+9. `fit_halo.py`: opacity and colour of the mark across backgrounds
+   (instrumental-variable fit; synthetic control, halo injection test);
+   `--profile` per logo/text and edge distance, with candidate mark models
+   (`--shadow`, `--text-gain`, `--text-glow`, `--logo-gain`, `--logo-rim`).
+10. `edge_profile.py`: edge profile on flat backgrounds, real vs synthetic.

@@ -33,6 +33,7 @@ from torch.utils.data import Dataset
 
 from wm_shared.marks import MarkProfile
 from wm_shared.marks.localize import localize
+from wm_shared.marks.profile import inner_rim
 
 IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".webp"}
 
@@ -152,13 +153,25 @@ class OverlaySynthDataset(Dataset):
         return style, (rng.uniform(*jx), rng.uniform(*jy))
 
     def _true_mark(self, rng: random.Random, listing_id: str, style: str, x: float, y: float,
-                   size: tuple[int, int], text_offset: tuple[float, float] = (0.0, 0.0)) -> tuple[np.ndarray, float]:
-        """The mark as stamped: nominal template with a small random deviation."""
+                   size: tuple[int, int], text_offset: tuple[float, float] = (0.0, 0.0)
+                   ) -> tuple[np.ndarray, float, np.ndarray]:
+        """The mark as stamped: nominal template with a small random deviation.
+
+        Returns the opacity map, the overlay level and the logo's shadow (H x W x 3
+        grey levels to subtract; it does not depend on the background).
+        """
         p = self.profile
         dev = self.cfg["mark_deviation"]
         scale = rng.uniform(*self.cfg.get("mark_scale", [1.0, 1.0]))
         m = p.render(listing_id, x, y, size=size, style=style, text_offset=text_offset, scale=scale)
-        if "sharpness" in dev:
+        if "rim" in dev:
+            # the edge profile varies per photo (each resized from a different original): a
+            # stronger or weaker inner rim than the template's (no outer undershoot; real marks
+            # have none), sometimes softened
+            m = m + rng.uniform(*dev["rim"]) * inner_rim(m, dev.get("rim_sigma", 1.0))
+            if rng.random() < dev.get("blur_prob", 0.0):
+                m = cv2.GaussianBlur(m, (0, 0), rng.uniform(*dev["blur_sigma"]))
+        elif "sharpness" in dev:
             # real marks are on average a bit softer than the template and vary per photo
             # (each photo resized from a different original): m + k * highpass(m),
             # k < 0 softens, k > 0 sharpens
@@ -168,7 +181,12 @@ class OverlaySynthDataset(Dataset):
             m = cv2.GaussianBlur(m, (0, 0), rng.uniform(*dev["blur_sigma"]))
         m = m * rng.uniform(*dev["opacity_scale"])
         overlay = p.overlay + rng.uniform(*dev["overlay_shift"])
-        return np.clip(m, 0, 1), overlay
+        shadow = np.zeros(m.shape + (3,), np.float32)
+        if p.shadow:
+            logo = p.render(listing_id, x, y, size=size, style="none", scale=scale)
+            shadow = p.shadow_map(logo, rng.uniform(*dev.get("shadow_gain", [1.0, 1.0])))
+            shadow *= np.float32([rng.uniform(*dev.get("shadow_rgb_jitter", [1.0, 1.0])) for _ in range(3)])
+        return np.clip(m, 0, 1), overlay, shadow
 
     # ── sample ───────────────────────────────────────────────────────────────
 
@@ -192,7 +210,7 @@ class OverlaySynthDataset(Dataset):
         listing_id = random_listing_id(rng, rng.choices(lengths, lprobs)[0])
         style, text_offset = self._style_and_offset(rng)
         bg = self._background_region(rng, rw, rh).astype(np.float32)
-        m_true, overlay = self._true_mark(rng, listing_id, style, tx + g, ty + g, (rw, rh), text_offset)
+        m_true, overlay, shadow = self._true_mark(rng, listing_id, style, tx + g, ty + g, (rw, rh), text_offset)
         base = bg
         if rng.random() < self.cfg.get("double_mark_prob", 0.0):
             # a photo re-used from another listing keeps that listing's mark and gets a second
@@ -204,17 +222,20 @@ class OverlaySynthDataset(Dataset):
                 if abs(dx) > 3 or abs(dy) > 3:
                     break
             other_style, other_offset = self._style_and_offset(rng)
-            m_other, overlay_other = self._true_mark(rng, random_listing_id(rng, len(listing_id)), other_style,
-                                                     tx + g + dx, ty + g + dy, (rw, rh), other_offset)
-            base = p.composite(bg, m_other, overlay_other)
-        stamped = np.clip(np.rint(p.composite(base, m_true, overlay)), 0, 255).astype(np.uint8)
+            m_other, overlay_other, shadow_other = self._true_mark(
+                rng, random_listing_id(rng, len(listing_id)), other_style, tx + g + dx, ty + g + dy, (rw, rh),
+                other_offset)
+            base = p.composite(bg, m_other, overlay_other) - shadow_other
+        stamped = np.clip(np.rint(p.composite(base, m_true, overlay) - shadow), 0, 255).astype(np.uint8)
         if base is not bg:
             m_true = np.clip(m_true + m_other, 0, 1)   # loss region and ghost term cover both marks
+            shadow = shadow + shadow_other
 
         q = self._quality(rng)
         wm = jpeg_roundtrip(stamped, q)[g:g + wh, g:g + ww]
         clean = jpeg_roundtrip(bg.astype(np.uint8), q)[g:g + wh, g:g + ww]
         m_true = m_true[g:g + wh, g:g + ww]
+        shadow = shadow[g:g + wh, g:g + ww]
 
         # the hint, exactly as inference builds it
         # a few photos are re-used from another listing and carry its ID, so the
@@ -228,7 +249,7 @@ class OverlaySynthDataset(Dataset):
                         scale=found_scale)
 
         # loss region: every 16x16 macroblock the mark touches, one block of margin
-        touched = (m_true > 1e-3).astype(np.uint8)
+        touched = ((m_true > 1e-3) | (shadow.max(-1) > 0.2)).astype(np.uint8)
         blocks = cv2.resize(touched, (ww // g, wh // g), interpolation=cv2.INTER_AREA) > 0
         blocks = cv2.dilate(blocks.astype(np.uint8), np.ones((3, 3), np.uint8))
         region = cv2.resize(blocks, (ww, wh), interpolation=cv2.INTER_NEAREST)
