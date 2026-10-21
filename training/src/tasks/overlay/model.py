@@ -13,6 +13,12 @@ unshuffle=k (CPU-oriented): a lossless pixel-unshuffle folds each k x k block
 into channels, the U-Net runs at 1/k resolution and a pixel-shuffle restores the
 full-resolution residual. Nothing is discarded, but the expensive full-resolution
 convolutions go away (about k^2 fewer MACs at equal widths).
+
+refine=c (with unshuffle > 1): a thin full-resolution head (three 3x3 convs, c
+channels) sees the full-resolution input and the shuffled residual and adds a
+correction. Half-resolution students otherwise leave faint ghosts of the 2-3 px
+text strokes; the head is zero-initialised, so a trained student loads into it
+unchanged (strict=False) and starts from its own output.
 """
 from __future__ import annotations
 
@@ -37,9 +43,17 @@ class ResBlock(nn.Module):
 
 class OverlayUNet(nn.Module):
     def __init__(self, in_channels: int = 7, out_channels: int = 3,
-                 widths: tuple[int, ...] = (32, 64, 96, 128), unshuffle: int = 1):
+                 widths: tuple[int, ...] = (32, 64, 96, 128), unshuffle: int = 1, refine: int = 0):
         super().__init__()
         self.unshuffle = unshuffle
+        self.refine = None
+        if unshuffle > 1 and refine > 0:
+            self.refine = nn.Sequential(
+                nn.Conv2d(in_channels + out_channels, refine, 3, padding=1), nn.LeakyReLU(0.1, inplace=True),
+                nn.Conv2d(refine, refine, 3, padding=1), nn.LeakyReLU(0.1, inplace=True),
+                nn.Conv2d(refine, out_channels, 3, padding=1))
+            nn.init.zeros_(self.refine[-1].weight)
+            nn.init.zeros_(self.refine[-1].bias)
         in_channels *= unshuffle * unshuffle
         out_channels *= unshuffle * unshuffle
         self.stem = nn.Conv2d(in_channels, widths[0], 3, padding=1)
@@ -60,6 +74,7 @@ class OverlayUNet(nn.Module):
         self.multiple = unshuffle * 2 ** (len(widths) - 1)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
+        full = x
         if self.unshuffle > 1:
             x = F.pixel_unshuffle(x, self.unshuffle)
         h = self.stem(x)
@@ -73,13 +88,18 @@ class OverlayUNet(nn.Module):
             h = up(h)
             h = block(torch.cat([h, skips.pop()], dim=1))
         out = self.head(h)
-        return F.pixel_shuffle(out, self.unshuffle) if self.unshuffle > 1 else out
+        if self.unshuffle == 1:
+            return out
+        out = F.pixel_shuffle(out, self.unshuffle)
+        if self.refine is not None:
+            out = out + self.refine(torch.cat([full, out], dim=1))
+        return out
 
 
 def build_model(cfg: dict) -> nn.Module:
     m = cfg["model"]
     return OverlayUNet(in_channels=m.get("in_channels", 7), widths=tuple(m.get("widths", (32, 64, 96, 128))),
-                       unshuffle=int(m.get("unshuffle", 1)))
+                       unshuffle=int(m.get("unshuffle", 1)), refine=int(m.get("refine", 0)))
 
 
 def count_params(model: nn.Module) -> int:

@@ -112,7 +112,11 @@ class OverlayTrainer:
             print(f"Resumed from {resume} (epoch {epoch}, best {self.best:.2f})")
         elif load_weights:
             ckpt = torch.load(load_weights, map_location="cpu", weights_only=True)
-            self.model.load_state_dict(ckpt["model"])
+            missing, unexpected = self.model.load_state_dict(ckpt["model"], strict=False)
+            if unexpected or any(not k.startswith("refine.") for k in missing):
+                raise RuntimeError(f"weights don't fit the model: missing {missing}, unexpected {unexpected}")
+            if missing:
+                print(f"  new (zero-initialised) layers: {sorted({k.split('.')[0] for k in missing})}")
             if self.ema is not None:   # start the average from the loaded weights, not the init
                 self.ema = EMA(self.model, self.ema.decay)
             print(f"Loaded weights from {load_weights}")
