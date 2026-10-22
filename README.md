@@ -57,16 +57,17 @@ its own pipeline; the Avito code below is unchanged.
   from their own mark) at JPEG q80 4:2:0, with the per-photo variation measured
   on real marks; target = the clean region after the same JPEG.
 
-- **Production model (2026-10-22): teacher ft7** — full resolution, at the
-  measurement noise floor on real photos (logo shadow and "ID" line included).
-  The distilled students (`cian_student_{b,c,d}_v3`, `c_v4` with a full-res
-  refine head) are 10-20x faster but leave faint digit ghosts at high contrast.
+- **Production model (2026-10-22): student C v3** — half resolution, distilled
+  from teacher ft7, ~10-20x faster than the teacher. Faint digit ghosts can remain
+  at strongly increased contrast. Teacher ft7 (full resolution, at the measurement
+  noise floor on real photos) uses the same mark assets and is the drop-in
+  alternative when quality matters more than speed.
 
 ```bash
 # teacher chain: ... -> ft5 -> ft6 (logo shadow) -> ft7 (per-character text strength)
 python training/train_overlay.py --config training/configs/cian_teacher_ft7.yaml --load-weights ft6_best.pth
 python training/train_overlay.py --config training/configs/cian_student_c_v3.yaml --load-weights c_v2_best.pth  # student
-python training/export_for_service.py --checkpoint ft7_best.pth --config training/configs/cian_teacher_ft7.yaml --name ft7 --out ../watermark-service/models
+python training/export_for_service.py --checkpoint student_c_v3_best.pth --config training/configs/cian_student_c_v3.yaml --name c_v3 --out ../watermark-service/models
 python training/remove_overlay.py --onnx model.onnx --listing-id 333768830 in.jpg out.png
 ```
 
