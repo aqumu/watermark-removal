@@ -3,12 +3,13 @@ export_for_service.py  package a trained overlay model for watermark-service
 ----------------------------------------------------------------------------
 Writes, into --out (the service's models/ directory or a staging folder):
 
-  model_cian_<name>.onnx   the model (input: 7xHxW from build_input, output: residual)
-  cian/mark.json           mark geometry, text styles, overlay level, anchor, window
-  cian/mark.npz            logo raster
-  cian/fonts/*             fonts referenced by mark.json (+ licence)
+  model_<mark>_<name>.onnx the model (input: 7xHxW from build_input, output: residual)
+  <mark>/mark.json         mark geometry (Cian: text styles, overlay level, anchor), window
+  <mark>/mark.npz          logo raster (Cian) / nominal Alpha and A maps (Avito)
+  <mark>/fonts/*           fonts referenced by mark.json (+ licence), text marks only
 
-The service's mode "cian" picks the newest model_cian_*.onnx and models/cian/.
+The service's mode "cian" picks the newest model_cian_*.onnx and models/cian/,
+mode "avito" the newest model_avito_*.onnx and models/avito/.
 
 Usage:
   python training/export_for_service.py --checkpoint student.pth --config cfg.yaml --name c_v2 --out ../watermark-service/models
@@ -37,7 +38,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--checkpoint", required=True)
     ap.add_argument("--config", required=True)
-    ap.add_argument("--name", required=True, help="suffix of model_cian_<name>.onnx")
+    ap.add_argument("--name", required=True, help="suffix of model_<mark>_<name>.onnx")
     ap.add_argument("--out", required=True)
     args = ap.parse_args()
 
@@ -45,7 +46,7 @@ def main():
     mark = cfg["mark"]
     profile = load_mark(mark)
     if float(cfg["data"].get("hint_scale", 8.0)) != 8.0:
-        print("note: hint_scale differs from the service default (8.0); set cian.hint_scale accordingly")
+        print(f"note: hint_scale differs from the service default (8.0); set {mark}.hint_scale accordingly")
     model = build_model(cfg)
     model.load_state_dict(torch.load(args.checkpoint, map_location="cpu", weights_only=True)["model"])
     model.eval()
@@ -60,12 +61,16 @@ def main():
 
     src = ASSETS_DIR / mark
     dst = out / mark
-    (dst / "fonts").mkdir(parents=True, exist_ok=True)
+    dst.mkdir(parents=True, exist_ok=True)
     for name in ("mark.json", "mark.npz"):
         shutil.copy2(src / name, dst / name)
-    for f in (src / "fonts").iterdir():
-        shutil.copy2(f, dst / "fonts" / f.name)
-    print(f"{dst}: mark.json, mark.npz, fonts/ ({len(list((dst / 'fonts').iterdir()))} files)")
+    fonts = ""
+    if (src / "fonts").is_dir():   # text marks (Cian); the fixed Avito mark has none
+        (dst / "fonts").mkdir(exist_ok=True)
+        for f in (src / "fonts").iterdir():
+            shutil.copy2(f, dst / "fonts" / f.name)
+        fonts = f", fonts/ ({len(list((dst / 'fonts').iterdir()))} files)"
+    print(f"{dst}: mark.json, mark.npz{fonts}")
 
 
 if __name__ == "__main__":

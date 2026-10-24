@@ -30,6 +30,7 @@ from src.common.run_context import prepare_run_context
 from src.common.run_log import tee_console_to_run_log
 from src.common.training_control import TrainingPaused
 from src.tasks.overlay.data import OverlaySynthDataset, is_holdout, load_backgrounds
+from src.tasks.overlay.data_fixed import FixedLayeredDataset
 from src.tasks.overlay.model import build_model, count_params
 from src.tasks.overlay.trainer import OverlayTrainer
 from wm_shared.experiment import ExperimentSession
@@ -72,7 +73,8 @@ def preview_photos(cfg: dict) -> list[tuple[np.ndarray, str]]:
         return []
     import cv2
     holdout = float(cfg["data"].get("holdout", 0.05))
-    rows = [r for r in csv.DictReader(open(path, encoding="utf-8")) if is_holdout(r["listing_id"], holdout)]
+    rows = [r for r in csv.DictReader(open(path, encoding="utf-8"))
+            if (r["split"] == "val" if "split" in r else is_holdout(r["listing_id"], holdout))]
     random.Random(1234).shuffle(rows)
     out, seen = [], set()
     for r in rows:
@@ -116,8 +118,9 @@ def main():
 
     tc = cfg["training"]
     bs = int(tc["batch_size"])
-    train_ds = OverlaySynthDataset(profile, bg_train, tc["steps_per_epoch"] * bs, dc, seed=None)
-    val_ds = OverlaySynthDataset(profile, bg_val, int(dc.get("val_samples", 512)), dc, seed=cfg["seed"])
+    dataset = FixedLayeredDataset if getattr(profile, "layered", False) else OverlaySynthDataset
+    train_ds = dataset(profile, bg_train, tc["steps_per_epoch"] * bs, dc, seed=None)
+    val_ds = dataset(profile, bg_val, int(dc.get("val_samples", 512)), dc, seed=cfg["seed"])
     nw = int(dc.get("num_workers", 8))
     use_cuda = cfg["device"] == "cuda"
     train_loader = DataLoader(train_ds, batch_size=bs, shuffle=False, num_workers=nw, drop_last=True,

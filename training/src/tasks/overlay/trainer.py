@@ -19,8 +19,8 @@ import torch.nn as nn
 
 from ...common.checkpointing import CSVLogger, _save_ckpt, _save_ckpt_to, load_checkpoint
 from ...common.training_control import TrainingPaused
-from .features import build_input, to_unit
-from .inference import remove_mark
+from .features import build_input, build_input_layered, to_unit
+from .inference import remove_mark, remove_mark_fixed
 from .losses import OverlayLoss
 
 
@@ -92,9 +92,13 @@ class OverlayTrainer:
                                            betas=(0.9, 0.99))
         self.amp_dtype = torch.bfloat16 if tc.get("amp", True) and self.device.type == "cuda" else None
         self.criterion = OverlayLoss(cfg)
-        self.criterion.overlay = profile.overlay   # the ghost term measures the mark against the profile's overlay
+        self.criterion.overlay = getattr(profile, "overlay", 0.0)   # the ghost term measures the mark against the profile's overlay
         self.ema = EMA(self.model, float(tc.get("ema_decay", 0.999))) if tc.get("ema_decay", 0) > 0 else None
         self.hint_scale = float(cfg["data"].get("hint_scale", 8.0))
+        self.layered = getattr(profile, "layered", False)
+        if self.layered:   # fixed position: the hint is the same for every sample
+            self.hint_maps = [torch.from_numpy(m.transpose(2, 0, 1).copy())[None].to(self.device)
+                              for m in profile.window_maps()]
         self.teacher, self.w_distill = self._load_teacher(cfg.get("distill"))
 
         self.ckpt_dir = Path(cfg["checkpointing"]["dir"])
@@ -151,8 +155,11 @@ class OverlayTrainer:
 
     def _forward(self, batch: dict, model: nn.Module):
         wm_u8 = batch["wm"].to(self.device, non_blocking=True)
-        hint = batch["hint"].to(self.device, non_blocking=True)
-        x = build_input(wm_u8, hint, self.profile.overlay, self.hint_scale)
+        if self.layered:
+            x = build_input_layered(wm_u8, *self.hint_maps, self.hint_scale)
+        else:
+            hint = batch["hint"].to(self.device, non_blocking=True)
+            x = build_input(wm_u8, hint, self.profile.overlay, self.hint_scale)
         x = x.contiguous(memory_format=torch.channels_last)
         wm = x[:, :3]
         with torch.autocast(self.device.type, dtype=self.amp_dtype, enabled=self.amp_dtype is not None):
@@ -164,7 +171,8 @@ class OverlayTrainer:
         target = to_unit(batch["target"].to(self.device, non_blocking=True))
         region = batch["region"].to(self.device, non_blocking=True).float()
         m_true = batch["m_true"].to(self.device, non_blocking=True).float()
-        return target, region, m_true
+        sig = batch["sig"].to(self.device, non_blocking=True).float() if "sig" in batch else None
+        return target, region, m_true, sig
 
     def _train_epoch(self, epoch: int) -> None:
         self.model.train()
@@ -173,9 +181,9 @@ class OverlayTrainer:
             lr = self._lr(self.global_step)
             for group in self.optimizer.param_groups:
                 group["lr"] = lr
-            target, region, m_true = self._targets(batch)
+            target, region, m_true, sig = self._targets(batch)
             pred, _ = self._forward(batch, self.model)
-            loss, parts = self.criterion(pred, target, region, m_true)
+            loss, parts = self.criterion(pred, target, region, m_true, sig)
             if self.teacher is not None:
                 with torch.no_grad():
                     t_pred, _ = self._forward(batch, self.teacher)
@@ -225,9 +233,10 @@ class OverlayTrainer:
         n = 0
         first = None
         for batch in self.val_loader:
-            target, region, m_true = self._targets(batch)
+            target, region, m_true, sig = self._targets(batch)
             pred, wm = self._forward(batch, model)
-            sums["ghost"] += float(OverlayLoss.ghost_amplitude(pred, target, m_true, self.profile.overlay).abs().sum())
+            overlay = getattr(self.profile, "overlay", 0.0)
+            sums["ghost"] += float(OverlayLoss.ghost_amplitude(pred, target, m_true, overlay, sig).abs().sum())
             b = target.shape[0]
             sums["psnr"] += float(psnr(pred, target).sum())
             sums["psnr_masked"] += float(psnr(pred, target, region).sum())
@@ -276,7 +285,12 @@ class OverlayTrainer:
     def _real_previews(self, model: nn.Module) -> dict:
         rows = []
         for rgb, listing_id in self.preview_photos:
-            out, info = remove_mark(rgb, listing_id, model, self.profile, self.device, self.hint_scale)
+            if self.layered:
+                out, info = remove_mark_fixed(rgb, model, self.profile, self.device, self.hint_scale)
+            else:
+                out, info = remove_mark(rgb, listing_id, model, self.profile, self.device, self.hint_scale)
+            if info["window"] is None:
+                continue
             x0, y0 = info["window"]
             ww, wh = self.profile.window
             before = cv2.cvtColor(rgb[y0:y0 + wh, x0:x0 + ww], cv2.COLOR_RGB2BGR)

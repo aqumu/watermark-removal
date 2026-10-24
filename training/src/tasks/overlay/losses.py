@@ -37,22 +37,24 @@ class OverlayLoss(nn.Module):
         self.eps = 1e-3
 
     @staticmethod
-    def _ghost_terms(pred, target, m_true, overlay):
+    def _ghost_terms(pred, target, m_true, overlay, sig=None):
+        """sig: the mark's own luma signal (Bx1xHxW, /127.5) when it is not m * (overlay - clean)."""
         luma = pred.new_tensor([0.299, 0.587, 0.114]).view(1, 3, 1, 1)
         e = ((pred - target) * luma).sum(1, keepdim=True)
-        clean = ((target + 1) * 127.5 * luma).sum(1, keepdim=True)
-        sig = m_true * (overlay - clean) / 127.5
+        if sig is None:
+            clean = ((target + 1) * 127.5 * luma).sum(1, keepdim=True)
+            sig = m_true * (overlay - clean) / 127.5
         return (e * sig).sum(dim=(1, 2, 3)), (sig * sig).sum(dim=(1, 2, 3))
 
     @classmethod
     def ghost_amplitude(cls, pred: torch.Tensor, target: torch.Tensor, m_true: torch.Tensor,
-                        overlay: float) -> torch.Tensor:
+                        overlay: float, sig: torch.Tensor | None = None) -> torch.Tensor:
         """Per-sample amplitude of the mark left in pred (inputs in [-1, 1], m_true Bx1xHxW)."""
-        num, den = cls._ghost_terms(pred, target, m_true, overlay)
+        num, den = cls._ghost_terms(pred, target, m_true, overlay, sig)
         return num / den.clamp(min=1e-3)
 
     def forward(self, pred: torch.Tensor, target: torch.Tensor, region: torch.Tensor,
-                m_true: torch.Tensor | None = None):
+                m_true: torch.Tensor | None = None, sig: torch.Tensor | None = None):
         err = pred - target
         weight = 1.0 + self.region_weight * region
         charb = torch.sqrt(err * err + self.eps ** 2)
@@ -67,7 +69,7 @@ class OverlayLoss(nn.Module):
         if self.w_ghost > 0 and m_true is not None:
             # |amplitude|, smoothly down-weighted when the mark signal itself is weak
             # (background close to the overlay level), where the amplitude is noise
-            num, den = self._ghost_terms(pred, target, m_true, self.overlay)
+            num, den = self._ghost_terms(pred, target, m_true, self.overlay, sig)
             ghost = torch.sqrt(num ** 2 / (den * (den + 10.0)).clamp(min=1e-6) + 1e-6).mean()
             total = total + self.w_ghost * ghost
             parts["ghost"] = ghost.detach()

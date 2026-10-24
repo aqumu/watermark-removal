@@ -41,6 +41,36 @@ For the run folder layout see [docs/README.md](docs/README.md).
 
 ---
 
+## Avito small logo (overlay removal)
+
+The small Avito logo (bottom-right corner) has its own CPU-oriented model,
+consumed by `watermark-service` mode `avito`; the large-mark pipeline remains
+there as `legacy_avito`.
+
+- **Mark profile:** `assets/marks/avito/`, measured from ~26k stored Avito photos
+  by `tools/avito_watermark/` (see its README for the findings and accuracy).
+  The mark is the same logo at the same pixels relative to the bottom-right
+  corner of every image (stamped after resizing): a white logo at 51% over a
+  black drop shadow, per pixel `out = b * (1 - Alpha) + A`. Photos are JPEG
+  q85 / q80 4:2:0.
+- **How it works:** the last 64 rows × 128 columns of the image go to a U-Net
+  together with the exact inverse for the nominal mark and the mark itself
+  (the same hint for every photo: no localiser). Pixels outside the window are
+  untouched.
+- **Training data:** synthesised on the fly (`training/src/tasks/overlay/data_fixed.py`)
+  from Avito photos away from their own mark and clean photos: the image's
+  bottom-right corner at a real size (so the JPEG grid phase matches), the mark
+  re-rendered from its layers with small deviations covering the measurement's
+  uncertainty, occasional double marks, JPEG at the measured quality.
+- **Model:** full resolution, widths 48/96/128/192 (the size of the Cian teacher):
+  on the small window this costs about what Cian student C v3 costs.
+
+```bash
+python training/train_overlay.py --config training/configs/avito_v1.yaml
+python tools/avito_watermark/eval_model.py --config training/configs/avito_v1.yaml --checkpoint <best.pth>   # held-out photos
+python training/export_for_service.py --checkpoint <best.pth> --config training/configs/avito_v1.yaml --name v1 --out ../watermark-service/models
+```
+
 ## Cian watermark (overlay removal)
 
 The Cian mark (logo + `ID <listing id>`, bottom-right, fixed pixel size) has

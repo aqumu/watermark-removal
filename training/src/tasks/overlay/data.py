@@ -59,7 +59,8 @@ def load_backgrounds(sources: list[dict], split: str, holdout: float) -> list[Ba
             with open(src["csv"], encoding="utf-8") as f:
                 for row in csv.DictReader(f):
                     key = row.get("listing_id") or row["path"]
-                    if is_holdout(key, holdout) == (split == "val"):
+                    val = row["split"] == "val" if "split" in row else is_holdout(key, holdout)
+                    if val == (split == "val"):
                         out.append(Background(row["path"], kind, row.get("listing_id")))
         else:
             for p in sorted(Path(src["dir"]).iterdir()):

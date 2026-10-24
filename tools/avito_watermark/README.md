@@ -86,3 +86,8 @@ same logo.
 7. `freeform.py`: phase-averaged free-form correction (`out/ff_*.npy`).
 8. `compare.py`, `profile.py`: real vs synthetic per phase / by edge distance.
 9. `accuracy.py`: held-out inverse test.
+10. `export_assets.py`: `assets/marks/avito/` (nominal maps = `ff`, the layer
+    parameters and a sub-pixel coverage bank for training) and
+    `data_gen/backgrounds/avito_index.csv` (held-out photos → `val`).
+11. `eval_model.py --config ... --checkpoint ...` (or `--onnx`): a trained removal
+    model on the held-out photos, the same leftover measure as `accuracy.py`.

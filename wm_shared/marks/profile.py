@@ -269,6 +269,9 @@ def _paste_add(dst: np.ndarray, src: np.ndarray, x: int, y: int) -> None:
 def load_mark(name: str = "cian", assets_dir: Path = ASSETS_DIR) -> MarkProfile:
     root = Path(assets_dir) / name
     meta = json.loads((root / "mark.json").read_text(encoding="utf-8"))
+    if meta.get("type") == "fixed_layered":
+        from .fixed import load_fixed
+        return load_fixed(name, root, meta)
     arrays = np.load(root / "mark.npz")
     edge = meta.get("edge", {})
     rim = {part: tuple(v["rim"]) for part, v in edge.items() if "rim" in v}

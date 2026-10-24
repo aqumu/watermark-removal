@@ -82,7 +82,13 @@ def main():
     ap.add_argument("--threads", type=int, default=4)
     ap.add_argument("--batch", type=int, nargs="+", default=[1, 8])
     args = ap.parse_args()
-    ww, wh = load_mark("cian").window
+    if args.config:
+        from train_overlay import load_cfg
+        cfg_for_shape = load_cfg(args.config)
+        mark_name = cfg_for_shape["mark"]
+    else:
+        mark_name = "cian"
+    ww, wh = load_mark(mark_name).window
     shape = (7, wh, ww)
 
     models = []

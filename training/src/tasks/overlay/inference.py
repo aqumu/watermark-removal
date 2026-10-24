@@ -14,7 +14,7 @@ import torch
 from wm_shared.marks import MarkProfile
 from wm_shared.marks.localize import localize
 
-from .features import build_input
+from .features import build_input, build_input_layered
 
 
 def prepare_window(rgb: np.ndarray, profile: MarkProfile, listing_id: str, hint_scale: float):
@@ -47,3 +47,23 @@ def remove_mark(rgb: np.ndarray, listing_id: str, model: torch.nn.Module, profil
     ph, pw = min(out_win.shape[0], h - y0), min(out_win.shape[1], w - x0)
     out[y0:y0 + ph, x0:x0 + pw] = out_win[:ph, :pw]
     return out, {"window": (x0, y0), "mark_origin": (x0 + lx, y0 + ly), "score": score, "style": style}
+
+
+@torch.no_grad()
+def remove_mark_fixed(rgb: np.ndarray, model: torch.nn.Module, profile, device: torch.device | str = "cpu",
+                      hint_scale: float = 8.0) -> tuple[np.ndarray, dict]:
+    """Fixed layered marks (wm_shared.marks.fixed): the window is the image's last rows / columns
+    and the hint is the nominal mark, the same for every photo."""
+    h, w = rgb.shape[:2]
+    ww, wh = profile.window
+    if h < wh or w < ww:
+        return rgb.copy(), {"window": None}
+    x0, y0 = profile.window_origin(w, h)
+    win = rgb[y0:y0 + wh, x0:x0 + ww]
+    alpha, a = (torch.from_numpy(m.transpose(2, 0, 1).copy())[None] for m in profile.window_maps())
+    wm_u8 = torch.from_numpy(np.ascontiguousarray(win.transpose(2, 0, 1)))[None]
+    x = build_input_layered(wm_u8, alpha, a, hint_scale).to(device)
+    pred = (x[:, :3] - model(x).float()).clamp(-1, 1)
+    out = rgb.copy()
+    out[y0:, x0:] = ((pred[0].cpu().numpy().transpose(1, 2, 0) + 1.0) * 127.5).round().clip(0, 255).astype(np.uint8)
+    return out, {"window": (x0, y0)}

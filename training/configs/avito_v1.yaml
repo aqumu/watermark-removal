@@ -1,0 +1,79 @@
+# Small Avito logo v1, trained from scratch on the measured mark (tools/avito_watermark,
+# assets/marks/avito): fixed position, so the hint is the nominal mark on the last 64 x 128 pixels.
+# Full resolution with teacher-size widths: on the 128 x 64 window this costs about what
+# Cian student C v3 costs on its 352 x 224 window.
+mark: avito
+
+data:
+  backgrounds:
+    # in-domain: Avito photos away from their own mark (bottom-right corner); "val" = the
+    # photos held out from the reverse engineering (tools/avito_watermark split)
+    - {csv: data_gen/backgrounds/avito_index.csv, kind: mark}
+    # clean real-estate photos without any mark
+    - {dir: data_gen/clean_images, kind: clean}
+  holdout: 0.05            # clean images only (the csv has its own split)
+  bg_scale:                # random downscale of a background, like a resized original
+    mark: [0.6, 1.0]
+    clean: [0.5, 1.0]
+  random_phase_prob: 0.3   # image sizes with a random JPEG grid phase (W % 16, H % 16)
+  # the stamp itself is the same in every photo; these cover the measurement's uncertainty
+  mark_deviation:
+    opacity_scale: [0.95, 1.05]
+    colour_shift: [-4.0, 4.0]
+    colour_channel_shift: [-2.0, 2.0]
+    logo_sigma: [0.2, 0.5]
+    shadow_gain: [0.8, 1.25]
+    shadow_blur_scale: [0.85, 1.15]
+    shadow_dx: [-0.1, 0.1]
+    shadow_dy: [-0.15, 0.15]
+    darken_gain: [0.6, 1.4]
+    darken_blur_scale: [0.8, 1.25]
+    jitter: [-0.1, 0.1]
+    freeform_weight: [0.5, 1.2]
+  double_same_prob: 0.02    # the same stamp twice (re-uploaded photo)
+  double_older_prob: 0.02   # an older displaced / rescaled mark under it
+  older_mark_scale: [0.6, 1.2]
+  older_mark_shift: [-12.0, 12.0]
+  quality_jitter_prob: 0.05
+  quality_jitter_range: [70, 95]
+  hint_scale: 8.0
+  val_samples: 1024
+  num_workers: 10
+  val_workers: 2
+  preview_csv: data_gen/backgrounds/avito_index.csv
+  preview_count: 8
+
+model:
+  in_channels: 7
+  widths: [48, 96, 128, 192]
+  unshuffle: 1
+
+training:
+  epochs: 40
+  steps_per_epoch: 2000
+  batch_size: 32
+  lr: 4.0e-4
+  min_lr: 1.0e-5
+  warmup_steps: 1000
+  weight_decay: 1.0e-4
+  grad_clip: 1.0
+  amp: true
+  ema_decay: 0.999
+  val_every: 1
+
+loss:
+  region_weight: 10.0
+  pixel: 1.0
+  grad: 1.0
+  ghost: 0.05
+
+checkpointing:
+  dir: ./runs/_ckpt_unused
+  keep_last: 3
+
+logging:
+  dir: ./runs/overlay_avito_v1
+  log_every: 50
+
+seed: 42
+device: cuda
