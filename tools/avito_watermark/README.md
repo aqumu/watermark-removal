@@ -73,6 +73,18 @@ same logo.
    outline with 4:2:0 colour fringes at ×5 contrast. That is the removal
    model's job; the pre-JPEG mark (`model` / `ff`) is what to stamp in training.
 
+3. **Removal model v1** (`training/configs/avito_v1.yaml`, `eval_model.py`), same
+   held-out photos and measure:
+
+   | | leftover median | p90 | p99 | > 17% |
+   |---|---|---|---|---|
+   | exact inverse with the nominal mark (the hint) | 5.0% | 9.4% | 18% | 1.5% |
+   | model v1 (ONNX export) | 0.4% | 2.3% | 7.5% | 0% |
+   | noise floor | 0.3% | 2.6% | 8.7% | 0.2% |
+
+   The largest remaining values are backgrounds whose texture or lettering
+   correlates with the mark's pattern; visually those photos are clean too.
+
 ## Order
 
 1. `survey.py`: index the Avito photos (`photo-lab/manifest_new.jsonl` +

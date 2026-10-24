@@ -64,6 +64,11 @@ there as `legacy_avito`.
   uncertainty, occasional double marks, JPEG at the measured quality.
 - **Model:** full resolution, widths 48/96/128/192 (the size of the Cian teacher):
   on the small window this costs about what Cian student C v3 costs.
+- **Release (2026-10-24): v1** (`model_avito_v1.onnx`, 8.5 MB), 40 epochs from scratch.
+  On 2,607 held-out photos the leftover mark is at the measurement noise floor
+  (0.4% of the input's median, 2.3% p90; noise floor 0.3% / 2.6%; the exact
+  inverse alone leaves 5.0% / 9.4%). CPU: ~90 ms per image on 1 thread, 30-40 ms
+  on 4 (C v3: the same), and no localisation step.
 
 ```bash
 python training/train_overlay.py --config training/configs/avito_v1.yaml
